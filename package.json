@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@google/genai": "latest",
+    "@google/genai": "^2.24.0",
     "@supabase/supabase-js": "^2.48.0",
     "clsx": "^2.1.1",
     "docx": "^9.1.1",
