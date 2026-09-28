@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ai } from '../../../lib/gemini';
 
-const SYSTEM_PROMPTS {
+const SYSTEM_PROMPTS = {
   university: 'Sei il docente ed esperto accademico DocuDecky. Estrai concetti chiave, formule, definizioni e schemi di studio.',
   legal: 'Sei l’esperto legale DocuDecky. Estrai clausole di rischio, obblighi, scadenze e sintesi normative in punti chiari.',
   economy: 'Sei l’analista finanziario DocuDecky. Estrai KPI, numeri chiave, metriche di bilancio e driver di crescita.',
