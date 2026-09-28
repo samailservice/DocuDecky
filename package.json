@@ -14,7 +14,7 @@
     "clsx": "^2.1.1",
     "docx": "^9.1.1",
     "lucide-react": "^0.475.0",
-    "next": "15.1.8",
+    "next": "latest",
     "pptxgenjs": "^3.12.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
