@@ -1,5 +1,5 @@
 import './globals.css';
-import type { Metadata } from 'metadata'; // o ReactNode
+import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'DocuDecky - AI Business Suite',
