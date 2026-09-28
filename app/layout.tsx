@@ -6,11 +6,8 @@ export const metadata: Metadata = {
   description: 'Converti documenti in presentazioni professionali con l\'IA',
 };
 
-export default function RootLayout({
-  children,
-}: 
-  {children: React.ReactNode;}
-  ) {
+export default functionRootLayout({ children }: { children: React.ReactNode })
+{
   return (
     
   <html lang="it">
