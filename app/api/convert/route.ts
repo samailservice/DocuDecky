@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ai } from './lib/gemini';
+import { ai } from '../../../lib/gemini';
 
 const SYSTEM_PROMPTS: Record = {
   university: 'Sei il docente ed esperto accademico DocuDecky. Estrai concetti chiave, formule, definizioni e schemi di studio.',
