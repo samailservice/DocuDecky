@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import './globals.css';
+import type { Metadata } from 'metadata'; // o ReactNode
 
 export const metadata: Metadata = {
-  title: "DocuDecky",
-  description: "Generatore di documenti e presentazioni con AI",
+  title: 'DocuDecky - AI Business Suite',
+  description: 'Converti documenti in presentazioni professionali con l\'IA',
 };
 
 export default function RootLayout({
@@ -13,7 +13,9 @@ export default function RootLayout({
 }) {
   return (
     
-      {children}
+      
+        {children}
+      
     
   );
 }
