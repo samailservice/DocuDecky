@@ -4,11 +4,11 @@ import { GoogleGenAI } from '@google/genai';
 const apiKey = process.env.GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-// Lista dei modelli da tentare in ordine in caso di sovraccarico (503) o errori
+// Modello principale gemini-3.8-flash seguito dai modelli di riserva validi
 const CANDIDATE_MODELS = [
+  'gemini-3.8-flash',
   'gemini-2.0-flash',
   'gemini-1.5-flash',
-  'gemini-2.5-flash'
 ];
 
 const SYSTEM_PROMPTS: { [key: string]: string } = {
@@ -39,12 +39,12 @@ async function generateContentWithFallback(contents: any[]) {
         return response.text;
       }
     } catch (err: any) {
-      console.warn(`Modello ${model} non disponibile o sovraccarico. Prova modello successivo. Error:`, err?.message || err);
+      console.warn(`Modello ${model} non disponibile o in errore. Prova modello successivo:`, err?.message || err);
       lastError = err;
     }
   }
 
-  throw lastError || new Error('Tutti i modelli AI disponibili sono al momento sovraccarichi.');
+  throw lastError || new Error('Tutti i modelli AI configurati hanno restituito errore.');
 }
 
 export async function POST(req: NextRequest) {
@@ -112,7 +112,6 @@ Obiettivo richiesto: ${objective}.
       ];
     }
 
-    // Chiamata con fallback automatico tra modelli
     const responseText = await generateContentWithFallback(contents);
     const cleanJson = responseText.replace(/```json|```/g, '').trim();
 
@@ -132,7 +131,7 @@ Obiettivo richiesto: ${objective}.
   } catch (error: any) {
     console.error('Errore durante la conversione:', error);
 
-    let cleanErrorMessage = 'I server AI sono momentaneamente sovraccarichi. Riprova tra qualche istante.';
+    let cleanErrorMessage = 'Errore nell’elaborazione con l’IA. Riprova tra qualche istante.';
     if (typeof error?.message === 'string') {
       try {
         const parsedErr = JSON.parse(error.message);
