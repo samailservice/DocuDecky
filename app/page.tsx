@@ -16,7 +16,7 @@ export default function Home() {
     if (!file) return;
 
     setLoading(true);
-    setStatusText('Lettura del documento in corso...');
+    setStatusText('Elaborazione IA in corso...');
 
     try {
       const formData = new FormData();
@@ -24,108 +24,38 @@ export default function Home() {
       formData.append('sector', sector);
       formData.append('objective', objective);
 
-      setStatusText('Analisi IA e generazione slide...');
-      const res = await fetch('/api/convert', {
-        method: 'POST',
-        body: formData,
-      });
+      const res = await fetch('/api/convert', { method: 'POST', body: formData });
+      const json = await res.json();
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ message: 'Errore durante la conversione' }));
-        throw new Error(errorData.message || 'Errore durante la conversione');
-      }
+      if (!res.ok) throw new Error(json.message || 'Errore di conversione');
 
-      const resJson = await res.json();
-      const data = resJson.data;
-
-      setStatusText('Download presentazione in corso...');
-
+      setStatusText('Creazione presentazione...');
       const pptx = new pptxgen();
       pptx.layout = 'LAYOUT_16x9';
 
-      const titleSlide = pptx.addSlide();
-      titleSlide.background = { color: 'F8FAFC' };
+      const data = json.data;
+      const tSlide = pptx.addSlide();
+      tSlide.addText(data.title || 'Presentazione', { x: 1, y: 2, w: 11, h: 1.5, fontSize: 36, bold: true });
+      if (data.summary) tSlide.addText(data.summary, { x: 1, y: 3.8, w: 11, h: 2, fontSize: 16 });
 
-      titleSlide.addText(data.title || 'Presentazione', {
-        x: 1.0,
-        y: 2.0,
-        w: 11.3,
-        h: 1.5,
-        fontSize: 36,
-        fontFace: 'Arial',
-        bold: true,
-        color: '0F172A',
-        align: 'left',
-      });
-
-      if (data.summary) {
-        titleSlide.addText(data.summary, {
-          x: 1.0,
-          y: 3.8,
-          w: 11.3,
-          h: 2.0,
-          fontSize: 16,
-          fontFace: 'Arial',
-          color: '475569',
-          align: 'left',
-        });
-      }
-
-      if (data.slides && data.slides.length > 0) {
-        data.slides.forEach((item: any) => {
+      if (data.slides) {
+        data.slides.forEach((s: any) => {
           const slide = pptx.addSlide();
-          slide.background = { color: 'FFFFFF' };
-
-          slide.addText(item.slideTitle || 'Nuova Slide', {
-            x: 0.8,
-            y: 0.8,
-            w: 11.7,
-            h: 0.8,
-            fontSize: 24,
-            fontFace: 'Arial',
-            bold: true,
-            color: '1E293B',
-          });
-
-          if (item.bulletPoints && item.bulletPoints.length > 0) {
-            const formattedBullets = item.bulletPoints.map((point: string) => ({
-              text: point,
-              options: {
-                bullet: true,
-                fontSize: 16,
-                fontFace: 'Arial',
-                color: '334155',
-                spaceAfter: 12,
-              },
-            }));
-
-            slide.addText(formattedBullets, {
-              x: 0.8,
-              y: 1.8,
-              w: 11.7,
-              h: 4.8,
-              align: 'left',
-              valign: 'top',
-            });
+          slide.addText(s.slideTitle || 'Slide', { x: 0.8, y: 0.8, w: 11.7, h: 0.8, fontSize: 24, bold: true });
+          if (s.bulletPoints) {
+            slide.addText(s.bulletPoints.map((p: string) => ({ text: p, options: { bullet: true, fontSize: 16 } })), { x: 0.8, y: 1.8, w: 11.7, h: 4.8 });
           }
         });
       }
 
-      const nameParts = file.name.split('.');
-      if (nameParts.length > 1) {
-        nameParts.pop();
-      }
-      const baseName = nameParts.join('.') || 'documento';
-      
+      const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || 'documento';
       await pptx.writeFile({ fileName: `${baseName}-presentazione.pptx` });
-
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Errore sconosciuto';
-      alert(`Errore: ${msg}`);
+    } catch (err: any) {
+      alert(`Errore: ${err.message}`);
     } finally {
       setLoading(false);
       setStatusText('');
     }
   };
 
-  return
+  return (
