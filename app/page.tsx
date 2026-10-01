@@ -6,7 +6,7 @@ import { Upload, Sparkles, FileText, Loader2, CheckCircle2 } from 'lucide-react'
 export default function Home() {
   const [file, setFile] = useState(null);
   const [sector, setSector] = useState('Business / Aziendale');
-  const [objective, objectiveSet] = useState('Presentazione PPTX');
+  const [objective, setObjective] = useState('Presentazione PPTX');
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState('');
 
