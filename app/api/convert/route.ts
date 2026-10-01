@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 
-// Inizializzazione del client Gemini
 const apiKey = process.env.GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-const SYSTEM_PROMPTS: Record = {
+const SYSTEM_PROMPTS: { [key: string]: string } = {
   'Business / Aziendale': 'Sei l’analista finanziario e business DocuDecky. Estrai KPI, metriche di bilancio, punti di forza e sintesi esecutiva.',
   'Educativo / Accademico': 'Sei il docente ed esperto accademico DocuDecky. Estrai concetti chiave, formule, definizioni e schemi di studio.',
   'Tecnologico / Startup': 'Sei il Solution Architect e Startup Mentor DocuDecky. Estrai architetture, specifiche tecniche e roadmap.',
@@ -64,7 +63,6 @@ Obiettivo richiesto: ${objective}.
 
     let contents: any[];
 
-    // Gestione nativa dei file PDF tramite Base64
     if (file.type.includes('pdf') || file.name.endsWith('.pdf')) {
       const arrayBuffer = await file.arrayBuffer();
       const base64Data = Buffer.from(arrayBuffer).toString('base64');
@@ -79,14 +77,12 @@ Obiettivo richiesto: ${objective}.
         promptText,
       ];
     } else {
-      // Per file di testo (.txt, .md, ecc.)
       const textContent = await file.text();
       contents = [
         `\({promptText}\n\nTesto del Documento:\n\){textContent.substring(0, 30000)}`,
       ];
     }
 
-    // Utilizzo del modello ufficiale valido gemini-2.5-flash
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: contents,
