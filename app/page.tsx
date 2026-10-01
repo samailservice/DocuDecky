@@ -35,17 +35,14 @@ export default function Home() {
         throw new Error(errorData.message || 'Errore durante la conversione');
       }
 
-      // 1. Estraiamo il JSON dalla risposta invece del Blob
       const resJson = await res.json();
       const data = resJson.data;
 
       setStatusText('Download presentazione in corso...');
 
-      // 2. Creazione della presentazione ottimizzata per Google Slides
       const pptx = new pptxgen();
       pptx.layout = 'LAYOUT_16x9';
 
-      // Slide 1: Copertina
       const titleSlide = pptx.addSlide();
       titleSlide.background = { color: 'F8FAFC' };
 
@@ -74,7 +71,6 @@ export default function Home() {
         });
       }
 
-      // Slide successive
       if (data.slides && data.slides.length > 0) {
         data.slides.forEach((item: any) => {
           const slide = pptx.addSlide();
@@ -115,14 +111,12 @@ export default function Home() {
         });
       }
 
-      // Preparazione del nome del file
       const nameParts = file.name.split('.');
       if (nameParts.length > 1) {
         nameParts.pop();
       }
       const baseName = nameParts.join('.') || 'documento';
       
-      // 3. Salvataggio e download diretto del file .pptx
       await pptx.writeFile({ fileName: `${baseName}-presentazione.pptx` });
 
     } catch (err: unknown) {
