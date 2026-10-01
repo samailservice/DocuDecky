@@ -4,11 +4,8 @@ import { GoogleGenAI } from '@google/genai';
 const apiKey = process.env.GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-// Elenco modelli Gemini supportati
-const CANDIDATE_MODELS = [
-  'gemini-3.8-flash',
-  'gemini-2.0-flash',
-];
+// Modello ufficiale e attivo richiesto dalle API Google
+const MODEL_NAME = 'gemini-3.8-flash';
 
 const SYSTEM_PROMPTS: { [key: string]: string } = {
   'Business / Aziendale': 'Sei l’analista finanziario e business DocuDecky. Estrai KPI, metriche di bilancio, punti di forza e sintesi esecutiva.',
@@ -23,28 +20,6 @@ const SYSTEM_PROMPTS: { [key: string]: string } = {
   medical: 'Sei il consulente medico-scientifico DocuDecky. Estrai evidenze scientifiche, sintomi, diagnosi e linee guida.',
   realestate: 'Sei l’esperto immobiliare DocuDecky. Estrai dati catastali, dettagli dell’immobile, perizie e condizioni contrattuali.'
 };
-
-async function generateContentWithFallback(contents: any[]) {
-  let lastError: any = null;
-
-  for (const model of CANDIDATE_MODELS) {
-    try {
-      const response = await ai.models.generateContent({
-        model: model,
-        contents: contents,
-      });
-
-      if (response && response.text) {
-        return response.text;
-      }
-    } catch (err: any) {
-      console.warn(`Modello ${model} non disponibile. Tentativo successivo:`, err?.message || err);
-      lastError = err;
-    }
-  }
-
-  throw lastError || new Error('Tutti i modelli Gemini sono al momento non disponibili.');
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -111,7 +86,12 @@ Obiettivo richiesto: ${objective}.
       ];
     }
 
-    const responseText = await generateContentWithFallback(contents);
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: contents,
+    });
+
+    const responseText = response.text || '';
     const cleanJson = responseText.replace(/```json|```/g, '').trim();
 
     let parsedData;
