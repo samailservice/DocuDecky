@@ -30,7 +30,7 @@ export default function Home() {
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
+        const errorData = await res.json().catch(() => ({ message: 'Errore durante la conversione' }));
         throw new Error(errorData.message || 'Errore durante la conversione');
       }
 
@@ -43,6 +43,7 @@ export default function Home() {
       document.body.appendChild(a);
       a.click();
       a.remove();
+      window.URL.revokeObjectURL(url);
     } catch (err: any) {
       alert(`Errore: ${err.message}`);
     } finally {
