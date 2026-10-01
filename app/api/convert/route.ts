@@ -4,6 +4,13 @@ import { GoogleGenAI } from '@google/genai';
 const apiKey = process.env.GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
+// Lista dei modelli da tentare in ordine in caso di sovraccarico (503) o errori
+const CANDIDATE_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-2.5-flash'
+];
+
 const SYSTEM_PROMPTS: { [key: string]: string } = {
   'Business / Aziendale': 'Sei l’analista finanziario e business DocuDecky. Estrai KPI, metriche di bilancio, punti di forza e sintesi esecutiva.',
   'Educativo / Accademico': 'Sei il docente ed esperto accademico DocuDecky. Estrai concetti chiave, formule, definizioni e schemi di studio.',
@@ -17,6 +24,28 @@ const SYSTEM_PROMPTS: { [key: string]: string } = {
   medical: 'Sei il consulente medico-scientifico DocuDecky. Estrai evidenze scientifiche, sintomi, diagnosi e linee guida.',
   realestate: 'Sei l’esperto immobiliare DocuDecky. Estrai dati catastali, dettagli dell’immobile, perizie e condizioni contrattuali.'
 };
+
+async function generateContentWithFallback(contents: any[]) {
+  let lastError: any = null;
+
+  for (const model of CANDIDATE_MODELS) {
+    try {
+      const response = await ai.models.generateContent({
+        model: model,
+        contents: contents,
+      });
+
+      if (response && response.text) {
+        return response.text;
+      }
+    } catch (err: any) {
+      console.warn(`Modello ${model} non disponibile o sovraccarico. Prova modello successivo. Error:`, err?.message || err);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('Tutti i modelli AI disponibili sono al momento sovraccarichi.');
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -83,13 +112,8 @@ Obiettivo richiesto: ${objective}.
       ];
     }
 
-    // Passaggio al modello richiesto dall'API Google
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: contents,
-    });
-
-    const responseText = response.text || '';
+    // Chiamata con fallback automatico tra modelli
+    const responseText = await generateContentWithFallback(contents);
     const cleanJson = responseText.replace(/```json|```/g, '').trim();
 
     let parsedData;
@@ -107,8 +131,19 @@ Obiettivo richiesto: ${objective}.
     return NextResponse.json({ success: true, data: parsedData });
   } catch (error: any) {
     console.error('Errore durante la conversione:', error);
+
+    let cleanErrorMessage = 'I server AI sono momentaneamente sovraccarichi. Riprova tra qualche istante.';
+    if (typeof error?.message === 'string') {
+      try {
+        const parsedErr = JSON.parse(error.message);
+        cleanErrorMessage = parsedErr?.error?.message || error.message;
+      } catch {
+        cleanErrorMessage = error.message;
+      }
+    }
+
     return NextResponse.json(
-      { message: error?.message || 'Errore interno durante l\'elaborazione.' },
+      { message: cleanErrorMessage },
       { status: 500 }
     );
   }
