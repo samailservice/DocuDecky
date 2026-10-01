@@ -4,11 +4,10 @@ import { GoogleGenAI } from '@google/genai';
 const apiKey = process.env.GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-// Modello principale gemini-3.8-flash seguito dai modelli di riserva validi
+// Modelli stabili ufficiali supportati dal SDK @google/genai
 const CANDIDATE_MODELS = [
-  'gemini-3.8-flash',
   'gemini-2.0-flash',
-  'gemini-1.5-flash',
+  'gemini-2.5-flash',
 ];
 
 const SYSTEM_PROMPTS: { [key: string]: string } = {
@@ -39,12 +38,12 @@ async function generateContentWithFallback(contents: any[]) {
         return response.text;
       }
     } catch (err: any) {
-      console.warn(`Modello ${model} non disponibile o in errore. Prova modello successivo:`, err?.message || err);
+      console.warn(`Modello ${model} non disponibile. Tentativo successivo:`, err?.message || err);
       lastError = err;
     }
   }
 
-  throw lastError || new Error('Tutti i modelli AI configurati hanno restituito errore.');
+  throw lastError || new Error('Tutti i modelli IA configurati hanno restituito errore.');
 }
 
 export async function POST(req: NextRequest) {
