@@ -39,13 +39,21 @@ export default function Home() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `\({file.name.replace(/\.[^/.]+\)/, '')}-presentazione.pptx`;
+
+      const nameParts = file.name.split('.');
+      if (nameParts.length > 1) {
+        nameParts.pop();
+      }
+      const baseName = nameParts.join('.') || 'documento';
+      a.download = `${baseName}-presentazione.pptx`;
+
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err: any) {
-      alert(`Errore: ${err.message}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Errore sconosciuto';
+      alert(`Errore: ${msg}`);
     } finally {
       setLoading(false);
       setStatusText('');
