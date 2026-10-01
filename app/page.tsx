@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Upload, Sparkles, FileText, Loader2 } from 'lucide-react';
+import { Upload, Sparkles, Loader2 } from 'lucide-react';
 
 export default function Home() {
   const [file, setFile] = useState(null);
