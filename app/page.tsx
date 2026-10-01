@@ -16,7 +16,7 @@ export default function Home() {
     if (!file) return;
 
     setLoading(true);
-    setStatusText('Elaborazione IA in corso...');
+    setStatusText('Elaborazione IA...');
 
     try {
       const formData = new FormData();
@@ -26,17 +26,16 @@ export default function Home() {
 
       const res = await fetch('/api/convert', { method: 'POST', body: formData });
       const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Errore');
 
-      if (!res.ok) throw new Error(json.message || 'Errore di conversione');
-
-      setStatusText('Creazione presentazione...');
+      setStatusText('Creazione PPTX...');
       const pptx = new pptxgen();
       pptx.layout = 'LAYOUT_16x9';
 
       const data = json.data;
-      const tSlide = pptx.addSlide();
-      tSlide.addText(data.title || 'Presentazione', { x: 1, y: 2, w: 11, h: 1.5, fontSize: 36, bold: true });
-      if (data.summary) tSlide.addText(data.summary, { x: 1, y: 3.8, w: 11, h: 2, fontSize: 16 });
+      const t = pptx.addSlide();
+      t.addText(data.title || 'Presentazione', { x: 1, y: 2, w: 11, h: 1.5, fontSize: 36, bold: true });
+      if (data.summary) t.addText(data.summary, { x: 1, y: 3.8, w: 11, h: 2, fontSize: 16 });
 
       if (data.slides) {
         data.slides.forEach((s: any) => {
@@ -48,8 +47,8 @@ export default function Home() {
         });
       }
 
-      const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || 'documento';
-      await pptx.writeFile({ fileName: `${baseName}-presentazione.pptx` });
+      const name = file.name.substring(0, file.name.lastIndexOf('.')) || 'documento';
+      await pptx.writeFile({ fileName: `${name}-presentazione.pptx` });
     } catch (err: any) {
       alert(`Errore: ${err.message}`);
     } finally {
