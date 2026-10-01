@@ -4,10 +4,10 @@ import { GoogleGenAI } from '@google/genai';
 const apiKey = process.env.GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-// Modelli stabili ufficiali supportati dal SDK @google/genai
+// Elenco modelli Gemini supportati
 const CANDIDATE_MODELS = [
+  'gemini-3.8-flash',
   'gemini-2.0-flash',
-  'gemini-2.5-flash',
 ];
 
 const SYSTEM_PROMPTS: { [key: string]: string } = {
@@ -43,7 +43,7 @@ async function generateContentWithFallback(contents: any[]) {
     }
   }
 
-  throw lastError || new Error('Tutti i modelli IA configurati hanno restituito errore.');
+  throw lastError || new Error('Tutti i modelli Gemini sono al momento non disponibili.');
 }
 
 export async function POST(req: NextRequest) {
@@ -130,7 +130,7 @@ Obiettivo richiesto: ${objective}.
   } catch (error: any) {
     console.error('Errore durante la conversione:', error);
 
-    let cleanErrorMessage = 'Errore nell’elaborazione con l’IA. Riprova tra qualche istante.';
+    let cleanErrorMessage = 'Errore durante l\'elaborazione con l\'IA Gemini.';
     if (typeof error?.message === 'string') {
       try {
         const parsedErr = JSON.parse(error.message);
