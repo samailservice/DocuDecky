@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { Upload, Sparkles, Loader2 } from 'lucide-react';
-import pptxgen from 'pptxgenjs';
 
 export default function Home() {
   const [file, setFile] = useState(null);
@@ -29,6 +28,9 @@ export default function Home() {
       if (!res.ok) throw new Error(json.message || 'Errore');
 
       setStatusText('Creazione PPTX...');
+      
+      // Import dinamico per evitare l'errore di build lato server
+      const pptxgen = (await import('pptxgenjs')).default;
       const pptx = new pptxgen();
       pptx.layout = 'LAYOUT_16x9';
 
