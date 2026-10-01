@@ -1,32 +1,54 @@
-{
-  "name": "docudecky",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "@google/genai": "latest",
-    "@supabase/supabase-js": "^2.48.0",
-    "autoprefixer": "^10.4.19",
-    "clsx": "^2.1.1",
-    "docx": "^9.1.1",
-    "lucide-react": "^0.475.0",
-    "next": "16.3.6",
-    "postcss": "^8.4.38",
-    "pptxgenjs": "^3.12.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "tailwind-merge": "^3.0.1",
-    "tailwindcss": "^3.4.1"
-  },
-  "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "typescript": "^5"
-  }
-}
+'use client';
+
+import React, { useState } from 'react';
+import { Upload, Sparkles, Loader2 } from 'lucide-react';
+
+export default function Home() {
+  const [file, setFile] = useState(null);
+  const [sector, setSector] = useState('Business / Aziendale');
+  const [objective, setObjective] = useState('Presentazione PPTX');
+  const [loading, setLoading] = useState(false);
+  const [statusText, setStatusText] = useState('');
+
+  const handleConvert = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file) return;
+
+    setLoading(true);
+    setStatusText('Lettura del documento in corso...');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('sector', sector);
+      formData.append('objective', objective);
+
+      setStatusText('Analisi IA e generazione slide...');
+      const res = await fetch('/api/convert', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Errore durante la conversione');
+      }
+
+      setStatusText('Download presentazione in corso...');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `\({file.name.replace(/\.[^/.]+\)/, '')}-presentazione.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err: any) {
+      alert(`Errore: ${err.message}`);
+    } finally {
+      setLoading(false);
+      setStatusText('');
+    }
+  };
+
+  return (
