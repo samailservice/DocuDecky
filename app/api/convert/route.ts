@@ -51,7 +51,7 @@ async function callAIWithFallback(promptText: string) {
       'Authorization': `Bearer ${groqApiKey}`,
     },
     body: JSON.stringify({
-      model: 'llama3-8b-8192',
+      model: 'llama-3.1-8b-instant',
       messages: [
         { role: 'system', content: 'Sei un analista aziendale esperto nella sintesi di documenti e nella creazione di presentazioni professionali.' },
         { role: 'user', content: promptText }
@@ -86,7 +86,7 @@ export async function POST(req: Request) {
     const cleanText = rawText.replace(/[^\x20-\x7E\sÀ-ÿ]/g, ' ').substring(0, 15000);
 
     // ==========================================
-    // STEP 1: Creazione della sintesi temporanea
+    // STEP 1: Creazione della sintesi temporanea del documento
     // ==========================================
     console.log('Step 1: Generazione sintesi del documento in corso...');
     const step1Prompt = `
@@ -100,7 +100,7 @@ ${cleanText}
     const documentSynthesis = await callAIWithFallback(step1Prompt);
 
     // ==========================================
-    // STEP 2: Generazione della presentazione grafica
+    // STEP 2: Generazione della presentazione strutturata basata sulla sintesi
     // ==========================================
     console.log('Step 2: Generazione della struttura delle slide basata sulla sintesi...');
     const step2Prompt = `
@@ -127,7 +127,7 @@ ${documentSynthesis}
     // Suddivisione del testo generato per popolare le slide successive
     const contentSlide = pptx.addSlide();
     contentSlide.addText("Contenuto Chiave & Sintesi", { x: 1, y: 0.8, fontSize: 20, bold: true, color: '363636' });
-    contentSlide.addText(finalPresentationText.substring(0, 1500), { x: 1, y: 1.5, fontSize: 12, color: '444444', w: '85%', h: '70%' });
+    contentSlide.addText(finalPresentationText.substring(0, 1000), { x: 1, y: 1.5, fontSize: 12, color: '444444', w: '85%', h: '70%' });
 
     const pptxBuffer = await pptx.write({ outputType: 'arraybuffer' });
 
