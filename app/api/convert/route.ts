@@ -5,7 +5,10 @@ import pptxgen from 'pptxgenjs';
 // Inizializza il client Google GenAI
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-async function callGeminiWithRetry(base64Data: string, mimeType: string, promptText: string, timeoutMs = 90000) {
+/**
+ * Step 1 & 2: Chiamata a Gemini basata su testo puro (con tentativi automatici e timeout a 90s)
+ */
+async function callGeminiTextWithRetry(promptText: string, timeoutMs = 90000) {
   const startTime = Date.now();
   let attempt = 0;
 
@@ -19,17 +22,7 @@ async function callGeminiWithRetry(base64Data: string, mimeType: string, promptT
       attempt++;
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: [
-          {
-            inlineData: {
-              data: base64Data,
-              mimeType: mimeType,
-            },
-          },
-          {
-            text: promptText,
-          },
-        ],
+        contents: promptText,
       });
       return response.text || '';
     } catch (error: any) {
@@ -46,15 +39,15 @@ async function callGeminiWithRetry(base64Data: string, mimeType: string, promptT
 }
 
 /**
- * Funzione di fallback che interroga Groq API con il modello classico e universale llama3-8b-8192.
+ * Fallback su Groq basato su testo puro (usa il modello universale llama3-8b-8192)
  */
-async function callGroqFallback(fileName: string, promptText: string) {
+async function callGroqTextFallback(promptText: string) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     throw new Error('Timeout Gemini raggiunto e chiave API Groq (GROQ_API_KEY) non configurata per il fallback.');
   }
 
-  console.log('Attivazione fallback gratuito su Groq in corso...');
+  console.log('Attivazione fallback testuale su Groq in corso...');
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -64,8 +57,8 @@ async function callGroqFallback(fileName: string, promptText: string) {
     body: JSON.stringify({
       model: 'llama3-8b-8192',
       messages: [
-        { role: 'system', content: 'Sei un assistente esperto nella strutturazione di presentazioni professionali.' },
-        { role: 'user', content: `Il documento si chiama "\({fileName}".\){promptText}` }
+        { role: 'system', content: 'Sei un assistente esperto nella strutturazione di presentazioni professionali e analisi di bilancio.' },
+        { role: 'user', content: promptText }
       ],
       temperature: 0.7,
     }),
@@ -91,22 +84,36 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Nessun file caricato' }, { status: 400 });
     }
 
+    // Estrazione del testo dal file caricato (gestione sicura del buffer)
     const fileBuffer = await file.arrayBuffer();
-    const base64Data = Buffer.from(fileBuffer).toString('base64');
-    const mimeType = file.type || 'application/pdf';
+    const rawText = Buffer.from(fileBuffer).toString('utf-8');
+    
+    // Pulizia di base per rimuovere caratteri binari superflui se il file è un PDF
+    const cleanText = rawText.replace(/[^\x20-\x7E\sÀ-ÿ]/g, ' ').substring(0, 15000);
 
-    const prompt = `Analizza questo documento (\({file.name}) e strutturalo per una presentazione professionale (\){objective}) mirata al settore "${sector}". 
-Estrai i punti chiave suddividendoli in slide chiare, con titoli e punti elenco strutturati.`;
+    // Creazione del prompt strutturato per l'IA
+    const prompt = `
+Sei un analista aziendale ed esperto di comunicazione. 
+Analizza il seguente documento estratto da "\({file.name}" e crea la struttura testuale per una presentazione professionale (\){objective}) mirata al settore "${sector}".
+
+Suddividi chiaramente l'output in slide (es. Slide 1: Titolo, Punti chiave, ecc.).
+
+Contenuto del documento:
+${cleanText}
+    `.trim();
 
     let resultText = '';
 
     try {
-      resultText = await callGeminiWithRetry(base64Data, mimeType, prompt, 90000);
+      // 1. Tenta la generazione testuale con Gemini
+      resultText = await callGeminiTextWithRetry(prompt, 90000);
     } catch (geminiError: any) {
+      // 2. Se Gemini fallisce o va in timeout, passa a Groq con lo stesso identico prompt testuale
       console.warn('Gemini non disponibile o timeout scaduto. Reindirizzamento a Groq...');
-      resultText = await callGroqFallback(file.name, prompt);
+      resultText = await callGroqTextFallback(prompt);
     }
 
+    // Generazione del file PowerPoint (.pptx) con pptxgenjs
     const pptx = new pptxgen();
     
     const slide = pptx.addSlide();
