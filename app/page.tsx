@@ -74,6 +74,3 @@ export default function Home() {
       setStatusText('');
     }
   };
-
-  if (!isAuthenticated) {
-    return (
