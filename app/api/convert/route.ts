@@ -1,30 +1,24 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import pptxgen from 'pptxgenjs';
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Funzione di retry avanzata con attesa più lunga per gestire i picchi 503
-async function generateWithRetry(fileBytes: Buffer, mimeType: string, prompt: string, maxRetries = 5) {
+// Funzione di retry automatica per gestire i picchi di traffico (503)
+async function generateWithRetry(contents: any, maxRetries = 5) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3.8-flash',
-        contents: [
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: fileBytes.toString('base64'),
-            },
-          },
-          prompt,
-        ],
+        contents: contents,
       });
       return response.text || '';
     } catch (error: any) {
       console.warn(`Tentativo \({attempt}/\){maxRetries} fallito:`, error.message);
       if (attempt === maxRetries) throw error;
-      // Attesa esponenziale più estesa (3s, 6s, 9s, 12s) per smaltire il picco 503
       await new Promise((resolve) => setTimeout(resolve, attempt * 3000));
     }
   }
@@ -32,6 +26,8 @@ async function generateWithRetry(fileBytes: Buffer, mimeType: string, prompt: st
 }
 
 export async function POST(req: Request) {
+  let tempFilePath: string | null = null;
+
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
@@ -46,31 +42,66 @@ export async function POST(req: Request) {
     const fileBuffer = await file.arrayBuffer();
     const fileBytes = Buffer.from(fileBuffer);
 
-    const prompt = `
-Sei un esperto di finanza e corporate storytelling. Analizza il documento allegato e suddividi i contenuti in esattamente 6-7 sezioni/slide. 
-Per ogni slide restituisci un titolo chiaro e una lista di punti elenco dettagliati e professionali.
-Usa rigorosamente questo formato esatto per ogni slide:
-=== SLIDE N: [Titolo della Slide] ===
-- [Punto elenco 1 con dettagli e metriche]
-- [Punto elenco 2]
-- [Punto elenco 3]
+    // ==========================================
+    // STEP 1: Prima query per l'estrazione e sintesi
+    // ==========================================
+    const prompt1 = [
+      {
+        inlineData: {
+          mimeType: file.type || 'application/pdf',
+          data: fileBytes.toString('base64'),
+        },
+      },
+      `Sei un esperto analista aziendale. Analizza il documento allegato e genera una sintesi approfondita e strutturata, estraendo dati di dettaglio, metriche finanziarie e strategie.
+      Contesto di riferimento:
+      - Obiettivo: ${objective}
+      - Settore: ${sector}
+      - Note aggiuntive: ${userAnswers || 'Nessuna'}
+      
+      Istruzione tassativa: Non scrivere preamboli, saluti o risposte conversazionali. Inizia direttamente con i dati estratti dal documento.`
+    ];
 
-Contesto di riferimento:
-- Obiettivo: ${objective}
-- Settore: ${sector}
-- Note: ${userAnswers || 'Nessuna'}
+    const rawAnalysisText = await generateWithRetry(prompt1);
+
+    // ==========================================
+    // STEP 2: Salvataggio in file temporaneo
+    // ==========================================
+    const tempDir = os.tmpdir();
+    tempFilePath = path.join(tempDir, `docudecky-temp-${Date.now()}.txt`);
+    await fs.writeFile(tempFilePath, rawAnalysisText, 'utf-8');
+
+    // Lettura dal file temporaneo appena creato
+    const fileContentForQuery2 = await fs.readFile(tempFilePath, 'utf-8');
+
+    // ==========================================
+    // STEP 3: Seconda query basata sul file temporaneo
+    // ==========================================
+    const prompt2 = `
+    Agisci come un esperto di corporate storytelling. Basandoti esclusivamente sul testo di sintesi contenuto nel file allegato/fornito qui sotto, suddividi i contenuti in esattamente 6-7 sezioni/slide formattate per una presentazione professionale.
+    
+    Usa rigorosamente questo formato esatto per ogni slide:
+    === SLIDE N: [Titolo della Slide] ===
+    - [Punto elenco 1 con dettagli e metriche]
+    - [Punto elenco 2]
+    - [Punto elenco 3]
+
+    Testo di sintesi di riferimento:
+    ${fileContentForQuery2}
     `;
 
-    const rawText = await generateWithRetry(fileBytes, file.type || 'application/pdf', prompt);
+    const finalSlidesText = await generateWithRetry(prompt2);
 
+    // ==========================================
+    // STEP 4: Generazione del file PowerPoint (.pptx)
+    // ==========================================
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_16x9';
 
-    const slideChunks = rawText.split('=== SLIDE').filter(Boolean);
+    const slideChunks = finalSlidesText.split('=== SLIDE').filter(Boolean);
 
     if (slideChunks.length === 0) {
       const slide = pptx.addSlide();
-      slide.addText(rawText, { x: 0.8, y: 0.8, w: '85%', h: '80%', fontSize: 14, color: '333333' });
+      slide.addText(finalSlidesText, { x: 0.8, y: 0.8, w: '85%', h: '80%', fontSize: 14, color: '333333' });
     } else {
       for (const chunk of slideChunks) {
         const lines = chunk.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -107,6 +138,18 @@ Contesto di riferimento:
 
     const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
 
+    // ==========================================
+    // STEP 5: Cancellazione file temporaneo
+    // ==========================================
+    if (tempFilePath) {
+      try {
+        await fs.unlink(tempFilePath);
+        tempFilePath = null;
+      } catch (e) {
+        console.warn('Impossibile rimuovere il file temporaneo:', e);
+      }
+    }
+
     return new NextResponse(pptxBuffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
@@ -115,10 +158,17 @@ Contesto di riferimento:
     });
 
   } catch (error: any) {
-    console.error('Errore API Generazione PPTX:', error);
+    // Pulizia di sicurezza del file temporaneo in caso di errore
+    if (tempFilePath) {
+      try {
+        await fs.unlink(tempFilePath);
+      } catch (e) {}
+    }
+
+    console.error('Errore API Workflow Due Step:', error);
     return NextResponse.json(
-      { message: 'I server di Google sono temporaneamente sovraccarichi (503). Riprova tra qualche istante.' },
-      { status: 503 }
+      { message: error.message || 'Errore interno durante il flusso di elaborazione a due step.' },
+      { status: 500 }
     );
   }
 }
