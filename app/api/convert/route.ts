@@ -4,9 +4,6 @@ import pptxgen from 'pptxgenjs';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-/**
- * STEP 2 & 4: Motore IA con logica del workflow (Tentativi su Gemini < 3 -> Switch su Groq)
- */
 async function callAIWithWorkflow(promptText: string): Promise<{ provider: string; text: string }> {
   let attempt = 0;
   const maxGeminiAttempts = 3;
@@ -133,7 +130,7 @@ Se invece hai tutte le informazioni necessarie per procedere, genera la struttur
           }
         }
       } catch (e) {
-        // Ignora e prosegue se il parsing fallisce
+        // Ignora e prosegue
       }
     }
 
