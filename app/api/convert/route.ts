@@ -61,26 +61,22 @@ Contesto di riferimento:
 
     const rawText = await generateWithRetry(fileBytes, file.type || 'application/pdf', prompt);
 
-    // Inizializzazione di pptxgenjs per generare il file PowerPoint reale
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_16x9';
 
-    // Parsing del testo generato dall'IA per suddividerlo in slide
     const slideChunks = rawText.split('=== SLIDE').filter(Boolean);
 
     if (slideChunks.length === 0) {
-      // Fallback se il formato differisce leggermente
       const slide = pptx.addSlide();
       slide.addText(rawText, { x: 0.8, y: 0.8, w: '85%', h: '80%', fontSize: 14, color: '333333' });
     } else {
       for (const chunk of slideChunks) {
         const lines = chunk.split('\n').map((l) => l.trim()).filter(Boolean);
-        const headerLine = lines[0].replace(/^[:=]+/, '').trim(); // es. "1: Executive Summary..."
+        const headerLine = lines[0].replace(/^[:=]+/, '').trim();
         const bulletPoints = lines.slice(1).map((l) => l.replace(/^[-*]\s*/, ''));
 
         const slide = pptx.addSlide();
 
-        // Stile professionale delle slide
         slide.addText(headerLine, {
           x: 0.8,
           y: 0.6,
@@ -88,7 +84,7 @@ Contesto di riferimento:
           h: 0.8,
           fontSize: 22,
           bold: true,
-          color: '4A154B', // Viola coordinato con la UI
+          color: '4A154B',
         });
 
         if (bulletPoints.length > 0) {
@@ -107,10 +103,10 @@ Contesto di riferimento:
       }
     }
 
-    // Generazione del buffer binario del file .pptx
     const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
 
-    return new NextResponse(pptxBuffer, {
+    // Cast esplicito per soddisfare il controllo di tipo BodyInit in Next.js
+    return new NextResponse(pptxBuffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         'Content-Disposition': 'attachment; filename="presentazione-docudecky.pptx"',
