@@ -1,58 +1,62 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Upload, Sparkles, Loader2 } from 'lucide-react';
 
-export default function Page() {
+export default function Home() {
+  const [file, setFile] = useState<File | null>(null);
+  const [sector, setSector] = useState('Business / Aziendale');
+  const [objective, setObjective] = useState('Presentazione PPTX');
   const [loading, setLoading] = useState(false);
-  const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState('');
+  const [statusText, setStatusText] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleConvert = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setLoading(true);
+    if (!file) return;
 
-    const formElement = e.currentTarget;
-    const formData = new FormData(formElement);
-    if (answers) {
-      formData.append('userAnswers', answers);
-    }
+    setLoading(true);
+    setStatusText('Lettura del documento in corso...');
 
     try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('sector', sector);
+      formData.append('objective', objective);
+
+      setStatusText('Analisi IA e generazione slide...');
       const res = await fetch('/api/convert', {
         method: 'POST',
         body: formData,
       });
 
-      const contentType = res.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data.needsInput) {
-          setQuestions(data.questions);
-          setLoading(false);
-          return;
-        }
-      }
-
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        alert(errData.message || 'Errore durante la generazione');
-        setLoading(false);
-        return;
+        const errorData = await res.json().catch(() => ({ message: 'Errore durante la conversione' }));
+        throw new Error(errorData.message || 'Errore durante la conversione');
       }
 
+      setStatusText('Download presentazione in corso...');
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = res.headers.get('content-disposition')?.split('filename="')[1]?.replace('"', '') || 'output.pptx';
+
+      const nameParts = file.name.split('.');
+      if (nameParts.length > 1) {
+        nameParts.pop();
+      }
+      const baseName = nameParts.join('.') || 'documento';
+      a.download = `${baseName}-presentazione.pptx`;
+
       document.body.appendChild(a);
       a.click();
       a.remove();
-    } catch (err: any) {
-      console.error(err);
-      alert('Errore di connessione al server');
+      window.URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Errore sconosciuto';
+      alert(`Errore: ${msg}`);
     } finally {
       setLoading(false);
+      setStatusText('');
     }
   };
 
