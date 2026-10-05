@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import pptxgen from 'pptxgenjs';
 
+// Inizializza il client Google GenAI
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 /**
  * Esegue la chiamata a Gemini con tentativi automatici.
- * Timeout ridotto a 90 secondi per lasciare spazio al fallback su ChatGPT prima del limite di Vercel.
+ * Timeout configurato a 90 secondi per lasciare spazio al fallback su Groq prima del limite di Vercel.
  */
 async function callGeminiWithRetry(base64Data: string, mimeType: string, promptText: string, timeoutMs = 90000) {
   const startTime = Date.now();
@@ -50,23 +51,23 @@ async function callGeminiWithRetry(base64Data: string, mimeType: string, promptT
 }
 
 /**
- * Funzione di fallback che interroga ChatGPT (OpenAI API) se Gemini non risponde in tempo.
+ * Funzione di fallback che interroga Groq API se Gemini non risponde in tempo o è sovraccarico.
  */
-async function callChatGPTFallback(fileName: string, promptText: string) {
-  const apiKey = process.env.OPENAI_API_KEY;
+async function callGroqFallback(fileName: string, promptText: string) {
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    throw new Error('Timeout Gemini raggiunto e chiave API OpenAI (OPENAI_API_KEY) non configurata per il fallback.');
+    throw new Error('Timeout Gemini raggiunto e chiave API Groq (GROQ_API_KEY) non configurata per il fallback.');
   }
 
-  console.log('Attivazione fallback su ChatGPT in corso...');
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  console.log('Attivazione fallback gratuito su Groq in corso...');
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: 'Sei un assistente esperto nella strutturazione di presentazioni professionali.' },
         { role: 'user', content: `Il documento si chiama "\({fileName}".\){promptText}` }
@@ -77,11 +78,11 @@ async function callChatGPTFallback(fileName: string, promptText: string) {
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    throw new Error(`Errore API ChatGPT: ${errData.error?.message || res.statusText}`);
+    throw new Error(`Errore API Groq: ${errData.error?.message || res.statusText}`);
   }
 
   const data = await res.json();
-  return data.choices?.[0]?.message?.content || 'Generazione completata tramite ChatGPT';
+  return data.choices?.[0]?.message?.content || 'Generazione completata tramite Groq';
 }
 
 export async function POST(req: Request) {
@@ -105,12 +106,12 @@ Estrai i punti chiave suddividendoli in slide chiare, con titoli e punti elenco 
     let resultText = '';
 
     try {
-      // 1. Tenta la generazione con Gemini (con timeout ottimizzato a 90s)
+      // 1. Tenta la generazione con Gemini
       resultText = await callGeminiWithRetry(base64Data, mimeType, prompt, 90000);
     } catch (geminiError: any) {
-      // 2. Se Gemini fallisce o scade il tempo, attiva immediatamente il fallback su ChatGPT
-      console.warn('Gemini non disponibile o timeout scaduto. Reindirizzamento a ChatGPT...');
-      resultText = await callChatGPTFallback(file.name, prompt);
+      // 2. Se Gemini fallisce o scade il tempo, attiva immediatamente il fallback gratuito su Groq
+      console.warn('Gemini non disponibile o timeout scaduto. Reindirizzamento a Groq...');
+      resultText = await callGroqFallback(file.name, prompt);
     }
 
     // Generazione del file PowerPoint (.pptx)
