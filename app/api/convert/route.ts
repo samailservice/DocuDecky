@@ -7,9 +7,9 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 /**
  * Esegue la chiamata a Gemini con tentativi automatici in caso di server occupato
- * e un timeout massimo di 5 minuti (300.000 ms).
+ * e un timeout massimo di 5 minuti (300.000 ms), gestendo direttamente file nativi (PDF, DOCX, ecc.).
  */
-async function callGeminiWithRetry(promptText: string, timeoutMs = 300000) {
+async function callGeminiWithRetry(base64Data: string, mimeType: string, promptText: string, timeoutMs = 300000) {
   const startTime = Date.now();
   let attempt = 0;
 
@@ -23,7 +23,17 @@ async function callGeminiWithRetry(promptText: string, timeoutMs = 300000) {
       attempt++;
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: promptText,
+        contents: [
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: mimeType,
+            },
+          },
+          {
+            text: promptText,
+          },
+        ],
       });
       return response.text || '';
     } catch (error: any) {
@@ -34,7 +44,7 @@ async function callGeminiWithRetry(promptText: string, timeoutMs = 300000) {
 
       // Backoff esponenziale con un'attesa massima di 30 secondi tra i tentativi
       const delay = Math.min(1000 * Math.pow(2, attempt), 30000);
-      console.warn(`[Gemini Tentativo \({attempt}] Server occupato o errore. Nuovo tentativo tra\){delay / 1000}s...`);
+      console.warn(`[Gemini Tentativo \({attempt}] Server occupato o errore:\){error.message || error}. Nuovo tentativo tra ${delay / 1000}s...`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
@@ -43,7 +53,7 @@ async function callGeminiWithRetry(promptText: string, timeoutMs = 300000) {
 /**
  * Funzione di fallback che interroga ChatGPT (OpenAI API) al termine del timeout di Gemini.
  */
-async function callChatGPTFallback(promptText: string) {
+async function callChatGPTFallback(fileName: string, promptText: string) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('Timeout Gemini raggiunto e chiave API OpenAI (OPENAI_API_KEY) non configurata per il fallback.');
@@ -60,7 +70,7 @@ async function callChatGPTFallback(promptText: string) {
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: 'Sei un assistente esperto nella strutturazione di presentazioni professionali.' },
-        { role: 'user', content: promptText }
+        { role: 'user', content: `Il documento si chiama "\({fileName}".\){promptText}` }
       ],
       temperature: 0.7,
     }),
@@ -86,25 +96,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Nessun file caricato' }, { status: 400 });
     }
 
+    // Conversione del file in Base64 per consentire a Gemini di leggere nativamente PDF e documenti
     const fileBuffer = await file.arrayBuffer();
-    const textContent = Buffer.from(fileBuffer).toString('utf-8');
+    const base64Data = Buffer.from(fileBuffer).toString('base64');
+    const mimeType = file.type || 'application/pdf';
 
-    const prompt = `
-      Analizza il seguente documento e strutturalo per una presentazione professionale (\({objective}) mirata al settore "\){sector}".
-      Estrai i punti chiave suddividendoli in slide con titoli e punti elenco chiari.
-      Documento:
-      ${textContent.substring(0, 15000)}
-    `;
+    const prompt = `Analizza questo documento (\({file.name}) e strutturalo per una presentazione professionale (\){objective}) mirata al settore "${sector}". 
+Estrai i punti chiave suddividendoli in slide chiare, con titoli e punti elenco strutturati.`;
 
     let resultText = '';
 
     try {
-      // 1. Tenta la generazione con Gemini (con retry e timeout di 5 minuti)
-      resultText = await callGeminiWithRetry(prompt, 300000);
+      // 1. Tenta la generazione con Gemini (con retry, timeout di 5 minuti e supporto nativo file)
+      resultText = await callGeminiWithRetry(base64Data, mimeType, prompt, 300000);
     } catch (geminiError: any) {
-      // 2. Se scade il timeout, passa a ChatGPT
+      // 2. Se scade il timeout o fallisce permanentemente, passa a ChatGPT
       console.warn('Gemini non disponibile o timeout scaduto. Reindirizzamento a ChatGPT...');
-      resultText = await callChatGPTFallback(prompt);
+      resultText = await callChatGPTFallback(file.name, prompt);
     }
 
     // Generazione del file PowerPoint (.pptx)
