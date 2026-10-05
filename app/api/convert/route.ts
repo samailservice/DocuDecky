@@ -79,8 +79,8 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;
-    const sector = formData.get('sector') as string || 'Business / Aziendale';
-    const objective = formData.get('objective') as string || 'Presentazione PPTX';
+    const sector = (formData.get('sector') as string) || 'Business / Aziendale';
+    const objective = (formData.get('objective') as string) || 'Presentazione PPTX';
 
     if (!file) {
       return NextResponse.json({ message: 'Nessun file caricato' }, { status: 400 });
@@ -102,19 +102,20 @@ export async function POST(req: Request) {
       // 1. Tenta la generazione con Gemini (con retry e timeout di 5 minuti)
       resultText = await callGeminiWithRetry(prompt, 300000);
     } catch (geminiError: any) {
-      // 2. Se scade il timeout o si verifica un blocco prolungato, passa a ChatGPT
+      // 2. Se scade il timeout, passa a ChatGPT
       console.warn('Gemini non disponibile o timeout scaduto. Reindirizzamento a ChatGPT...');
       resultText = await callChatGPTFallback(prompt);
     }
 
-    // Generazione del file PowerPoint (.pptx) compatibile con Google Slides
+    // Generazione del file PowerPoint (.pptx)
     const pptx = new pptxgen();
     
     const slide = pptx.addSlide();
     slide.addText(`Presentazione: ${file.name}`, { x: 1, y: 1, fontSize: 22, bold: true, color: '363636' });
     slide.addText(resultText.substring(0, 1000), { x: 1, y: 2, fontSize: 13, color: '555555', w: '80%' });
 
-    const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' }) as Buffer;
+    // Modificato in 'arraybuffer' per soddisfare i requisiti TypeScript di Next.js (BodyInit)
+    const pptxBuffer = await pptx.write({ outputType: 'arraybuffer' });
 
     return new NextResponse(pptxBuffer, {
       headers: {
