@@ -7,28 +7,30 @@ import os from 'os';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Funzione di retry avanzata con fallback di modello in caso di errore 503 (High Demand)
-async function generateWithRetry(contents: any, maxRetries = 4) {
-  const models = ['gemini-3.8-flash', 'gemini-1.5-flash'];
+// Funzione di retry con gestione dedicata dell'errore di quota (429)
+async function generateWithRetry(contents: any, maxRetries = 3) {
+  const model = 'gemini-3.8-flash';
 
-  for (const model of models) {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model: model,
-          contents: contents,
-        });
-        return response.text || '';
-      } catch (error: any) {
-        console.warn(`Modello \({model} - Tentativo\){attempt}/${maxRetries} fallito:`, error.message);
-        if (attempt === maxRetries && model === models[models.length - 1]) {
-          throw error;
-        }
-        await new Promise((resolve) => setTimeout(resolve, attempt * 2500));
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: model,
+        contents: contents,
+      });
+      return response.text || '';
+    } catch (error: any) {
+      console.warn(`Modello \({model} - Tentativo\){attempt}/${maxRetries} fallito:`, error.message);
+      
+      // Se la quota giornaliera gratuita è esaurita (429), interrompi subito i retry e segnalalo
+      if (error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED') || error?.message?.includes('quota')) {
+        throw new Error('QUOTA_EXHAUSTED');
       }
+
+      if (attempt === maxRetries) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
     }
   }
-  throw new Error('Superato il limite massimo di tentativi con i modelli Gemini.');
+  throw new Error('Superato il limite massimo di tentativi con Gemini.');
 }
 
 export async function POST(req: Request) {
@@ -49,7 +51,7 @@ export async function POST(req: Request) {
     const fileBytes = Buffer.from(fileBuffer);
 
     // =========================================================================
-    // STEP 1: Prima query - Sottopone il file e chiede di creare un prompt funzionale
+    // STEP 1: Prima query - Sottopone il file e genera il prompt di sintesi
     // =========================================================================
     const prompt1 = [
       {
@@ -71,17 +73,16 @@ export async function POST(req: Request) {
     const generatedPromptText = await generateWithRetry(prompt1);
 
     // =========================================================================
-    // STEP 2: Salvataggio dell'output della prima query in un file temporaneo
+    // STEP 2: Salvataggio dell'output in file temporaneo
     // =========================================================================
     const tempDir = os.tmpdir();
     tempFilePath = path.join(tempDir, `docudecky-prompt-${Date.now()}.txt`);
     await fs.writeFile(tempFilePath, generatedPromptText, 'utf-8');
 
-    // Lettura del testo dal file temporaneo appena creato
     const fileContentForQuery2 = await fs.readFile(tempFilePath, 'utf-8');
 
     // =========================================================================
-    // STEP 3: Seconda query - Usa il testo del file temporaneo per creare la presentazione
+    // STEP 3: Seconda query - Crea la presentazione basata sul file temporaneo
     // =========================================================================
     const prompt2 = `
     Agisci come un esperto di corporate storytelling. Utilizzando rigorosamente il testo e le istruzioni presenti nel file di riferimento qui sotto, genera la struttura finale della presentazione suddivisa in esattamente 6-7 sezioni/slide.
@@ -99,7 +100,7 @@ export async function POST(req: Request) {
     const finalSlidesText = await generateWithRetry(prompt2);
 
     // =========================================================================
-    // STEP 4: Generazione del file PowerPoint (.pptx)
+    // STEP 4: Generazione file PowerPoint (.pptx)
     // =========================================================================
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_16x9';
@@ -146,15 +147,13 @@ export async function POST(req: Request) {
     const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
 
     // =========================================================================
-    // STEP 5: Cancellazione del file temporaneo (avvenuta generazione con successo)
+    // STEP 5: Cancellazione file temporaneo
     // =========================================================================
     if (tempFilePath) {
       try {
         await fs.unlink(tempFilePath);
         tempFilePath = null;
-      } catch (e) {
-        console.warn('Impossibile rimuovere il file temporaneo:', e);
-      }
+      } catch (e) {}
     }
 
     return new NextResponse(pptxBuffer as unknown as BodyInit, {
@@ -165,7 +164,6 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    // Pulizia di sicurezza del file temporaneo in caso di errore
     if (tempFilePath) {
       try {
         await fs.unlink(tempFilePath);
@@ -173,9 +171,18 @@ export async function POST(req: Request) {
     }
 
     console.error('Errore API Workflow Due Step:', error);
+
+    // Gestione specifica per quota esaurita
+    if (error.message === 'QUOTA_EXHAUSTED' || error?.status === 429) {
+      return NextResponse.json(
+        { message: 'Hai raggiunto il limite massimo giornaliero di richieste gratuite della chiave API Gemini (20 richieste/giorno). Riprova domani o inserisci una chiave con un piano a pagamento.' },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json(
-      { message: 'I server di Google sono temporaneamente sovraccarichi (503). Riprova tra qualche istante.' },
-      { status: 503 }
+      { message: error.message || 'Errore interno durante il flusso di elaborazione a due step.' },
+      { status: 500 }
     );
   }
 }
