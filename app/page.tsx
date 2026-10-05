@@ -1,76 +1,38 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Upload, Sparkles, Loader2, ShieldCheck, Zap, User, Lock, Mail, ArrowRight, LogOut } from 'lucide-react';
+import { useState } from 'react';
+import { Upload, Sparkles, Loader2, LogOut } from 'lucide-react';
 
 export default function Home() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
+  const [isAuth, setIsAuth] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-
   const [file, setFile] = useState(null);
-  const [sector, setSector] = useState('Business / Aziendale');
-  const [objective, setObjective] = useState('Presentazione PPTX');
   const [loading, setLoading] = useState(false);
-  const [statusText, setStatusText] = useState('');
-
-  const handleAuth = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) {
-      alert('Compila tutti i campi obbligatori.');
-      return;
-    }
-    setIsAuthenticated(true);
-  };
 
   const handleConvert = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
-
     setLoading(true);
-    setStatusText('Lettura del documento in corso...');
-
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('sector', sector);
-      formData.append('objective', objective);
-
-      setStatusText('Analisi IA e generazione slide...');
-      const res = await fetch('/api/convert', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ message: 'Errore durante la conversione' }));
-        throw new Error(errorData.message || 'Errore durante la conversione');
-      }
-
-      setStatusText('Download presentazione in corso...');
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/convert', { method: 'POST', body: fd });
+      if (!res.ok) throw new Error('Errore conversione');
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-
-      const nameParts = file.name.split('.');
-      if (nameParts.length > 1) {
-        nameParts.pop();
-      }
-      const baseName = nameParts.join('.') || 'documento';
-      a.download = `${baseName}-presentazione.pptx`;
-
+      a.download = 'presentazione.pptx';
       document.body.appendChild(a);
       a.click();
       a.remove();
-      window.URL.revokeObjectURL(url);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Errore sconosciuto';
-      alert(`Errore: ${msg}`);
+      alert(err instanceof Error ? err.message : 'Errore sconosciuto');
     } finally {
       setLoading(false);
-      setStatusText('');
     }
-  }
+  };
+
+  if (!isAuth) {
+    return (
