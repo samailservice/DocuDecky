@@ -4,7 +4,8 @@ import pptxgen from 'pptxgenjs';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-async function generateWithRetry(fileBytes: Buffer, mimeType: string, prompt: string, maxRetries = 3) {
+// Funzione di retry avanzata con attesa più lunga per gestire i picchi 503
+async function generateWithRetry(fileBytes: Buffer, mimeType: string, prompt: string, maxRetries = 5) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const response = await ai.models.generateContent({
@@ -23,7 +24,8 @@ async function generateWithRetry(fileBytes: Buffer, mimeType: string, prompt: st
     } catch (error: any) {
       console.warn(`Tentativo \({attempt}/\){maxRetries} fallito:`, error.message);
       if (attempt === maxRetries) throw error;
-      await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+      // Attesa esponenziale più estesa (3s, 6s, 9s, 12s) per smaltire il picco 503
+      await new Promise((resolve) => setTimeout(resolve, attempt * 3000));
     }
   }
   throw new Error('Superato il limite massimo di tentativi con Gemini.');
@@ -105,7 +107,6 @@ Contesto di riferimento:
 
     const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
 
-    // Cast esplicito per soddisfare il controllo di tipo BodyInit in Next.js
     return new NextResponse(pptxBuffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
@@ -116,8 +117,8 @@ Contesto di riferimento:
   } catch (error: any) {
     console.error('Errore API Generazione PPTX:', error);
     return NextResponse.json(
-      { message: error.message || 'Errore interno durante la generazione della presentazione.' },
-      { status: 500 }
+      { message: 'I server di Google sono temporaneamente sovraccarichi (503). Riprova tra qualche istante.' },
+      { status: 503 }
     );
   }
 }
