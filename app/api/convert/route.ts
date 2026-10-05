@@ -5,19 +5,16 @@ import pptxgen from 'pptxgenjs';
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 /**
- * STEP 2: Sintesi Agente AI con logica del workflow
- * - Loop su Gemini (Fallimento < 3 volte)
- * - Switch su Groq (Fallimento >= 3 volte) con il modello attivo openai/gpt-oss-20b
+ * STEP 2 & 4: Motore IA con logica del workflow (Tentativi su Gemini < 3 -> Switch su Groq)
  */
-async function getAISynthesisWithWorkflow(promptText: string): Promise<{ provider: string; text: string }> {
+async function callAIWithWorkflow(promptText: string): Promise<{ provider: string; text: string }> {
   let attempt = 0;
   const maxGeminiAttempts = 3;
 
-  // Loop su Gemini (Tentativi < 3)
   while (attempt < maxGeminiAttempts) {
     try {
       attempt++;
-      console.log(`[Step 2] Gemini - Tentativo ${attempt}/3 in corso...`);
+      console.log(`[AI Workflow] Gemini - Tentativo ${attempt}/3 in corso...`);
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: promptText,
@@ -26,22 +23,21 @@ async function getAISynthesisWithWorkflow(promptText: string): Promise<{ provide
         return { provider: 'Gemini', text: response.text };
       }
     } catch (error: any) {
-      console.warn(`[Step 2] Gemini - Tentativo ${attempt} fallito:`, error.message);
+      console.warn(`[AI Workflow] Gemini - Tentativo ${attempt} fallito:`, error.message);
       if (attempt >= maxGeminiAttempts) {
-        console.warn('[Step 2] Fallimento >= 3 volte su Gemini. Switch automatico su Groq...');
+        console.warn('[AI Workflow] Fallimento >= 3 volte su Gemini. Switch automatico su Groq...');
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
 
-  // Switch su Groq (Fallback dopo 3 tentativi falliti su Gemini)
   const groqApiKey = process.env.GROQ_API_KEY;
   if (!groqApiKey) {
     throw new Error('Gemini non disponibile dopo 3 tentativi e chiave API Groq (GROQ_API_KEY) non configurata.');
   }
 
-  console.log('[Step 2] Switch su Groq (openai/gpt-oss-20b) in corso...');
+  console.log('[AI Workflow] Switch su Groq (openai/gpt-oss-20b) in corso...');
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -51,7 +47,7 @@ async function getAISynthesisWithWorkflow(promptText: string): Promise<{ provide
     body: JSON.stringify({
       model: 'openai/gpt-oss-20b',
       messages: [
-        { role: 'system', content: 'Sei un analista aziendale esperto nella sintesi di documenti.' },
+        { role: 'system', content: 'Sei un analista aziendale esperto nella creazione di presentazioni e report strategici.' },
         { role: 'user', content: promptText }
       ],
       temperature: 0.7,
@@ -77,6 +73,7 @@ export async function POST(req: Request) {
     const sector = (formData.get('sector') as string) || 'Business / Aziendale';
     const objective = (formData.get('objective') as string) || 'Presentazione PPTX';
     const outputFormat = (formData.get('format') as string) || 'pptx';
+    const userAnswers = (formData.get('userAnswers') as string) || ''; // Eventuali risposte fornite dall'utente alla finestra di dialogo
 
     if (!file) {
       return NextResponse.json({ message: 'Nessun file caricato' }, { status: 400 });
@@ -94,25 +91,58 @@ export async function POST(req: Request) {
     // ====================================================
     // STEP 2 & 3: SINTESI AGENTE AI & PROMPT INTERMEDIO
     // ====================================================
-    const { provider, text: synthesisText } = await getAISynthesisWithWorkflow(analysisPrompt);
-    
-    // Creazione del Prompt Intermedio basato sulla sintesi pulita
-    const intermediatePrompt = `
-Basandoti sulla sintesi chiave del documento, genera la struttura finale completa per l'obiettivo "\({objective}" nel settore "\){sector}". 
-Fornisci i contenuti suddivisi in sezioni e slide dettagliate con titoli e punti elenco professionali.
+    const { provider, text: synthesisText } = await callAIWithWorkflow(analysisPrompt);
 
-Sintesi di riferimento:
+    // ====================================================
+    // STEP 4: SCELTA OUTPUT & GENERAZIONE CON I 3 PILASTRI
+    // ====================================================
+    const step4Prompt = `
+Agisci come un consulente strategico senior. Devi valutare se le informazioni attuali sono sufficienti o se mancano dettagli critici.
+I 3 pilastri fondamentali da considerare sono:
+1. OBIETTIVO SPECIFICO: "${objective}"
+2. SETTORE DI RIFERIMENTO: "${sector}"
+3. SINTESI CHIAVE DEL DOCUMENTO:
 ${synthesisText}
+\({userAnswers ? `\nInformazioni integrative fornite dall'utente:\){userAnswers}` : ''}
+
+REGOLA CRITICA PER LA DIALOGO UTENTE:
+Se ritieni che manchino indicazioni fondamentali o dati strategici per personalizzare al meglio il lavoro, NON inventarli ma restituisci un oggetto JSON con questo formato esatto:
+{
+  "needsInput": true,
+  "questions": [
+    "Prima domanda specifica da fare all'utente?",
+    "Seconda domanda specifica da fare all'utente?"
+  ]
+}
+
+Se invece hai tutte le informazioni necessarie per procedere, genera la struttura completa dell'output suddivisa in sezioni/slide professionali con Titoli e Punti Elenco.
     `.trim();
 
-    // Elaborazione finale sfruttando lo stesso motore resiliente del workflow
-    const { text: finalContent } = await getAISynthesisWithWorkflow(intermediatePrompt);
+    const { text: aiResponse } = await callAIWithWorkflow(step4Prompt);
+
+    // Controllo se l'IA richiede un input interattivo tramite finestra di dialogo
+    if (aiResponse.trim().startsWith('{') && aiResponse.includes('needsInput')) {
+      try {
+        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.needsInput) {
+            return NextResponse.json({
+              needsInput: true,
+              questions: parsed.questions || ['Potresti fornire maggiori dettagli sul target di riferimento?'],
+            }, { status: 200 });
+          }
+        }
+      } catch (e) {
+        // Se il parsing JSON fallisce, prosegue normalmente con la generazione
+      }
+    }
 
     // ====================================================
-    // STEP 4 & 5: SCELTA OUTPUT & DOWNLOAD AUTOMATICO
+    // STEP 5: DOWNLOAD AUTOMATICO (PPTX o DOCX)
     // ====================================================
     if (outputFormat === 'docx' || objective.toLowerCase().includes('docx') || objective.toLowerCase().includes('pitch')) {
-      const docBuffer = Buffer.from(`REPORT DI SINTESI / PITCH\nMotore IA: \({provider}\nSettore:\){sector}\n\n${finalContent}`, 'utf-8');
+      const docBuffer = Buffer.from(`REPORT DI SINTESI / PITCH\nMotore IA: \({provider}\nSettore:\){sector}\nObiettivo: \({objective}\n\n\){aiResponse}`, 'utf-8');
       return new NextResponse(docBuffer, {
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -124,11 +154,11 @@ ${synthesisText}
       
       const coverSlide = pptx.addSlide();
       coverSlide.addText(`Presentazione: ${file.name}`, { x: 1, y: 1.5, fontSize: 24, bold: true, color: '363636' });
-      coverSlide.addText(`Settore: \({sector} | Elaborato con:\){provider}`, { x: 1, y: 2.5, fontSize: 13, color: '666666' });
+      coverSlide.addText(`Settore: \({sector} | Obiettivo:\){objective}\nElaborato con: ${provider}`, { x: 1, y: 2.5, fontSize: 13, color: '666666' });
 
       const contentSlide = pptx.addSlide();
       contentSlide.addText("Contenuti e Punti Chiave", { x: 1, y: 0.8, fontSize: 20, bold: true, color: '363636' });
-      contentSlide.addText(finalContent.substring(0, 1500), { x: 1, y: 1.5, fontSize: 12, color: '444444', w: '85%', h: '70%' });
+      contentSlide.addText(aiResponse.substring(0, 1500), { x: 1, y: 1.5, fontSize: 12, color: '444444', w: '85%', h: '70%' });
 
       const pptxBuffer = await pptx.write({ outputType: 'arraybuffer' });
 
