@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Funzione di supporto per gestire i tentativi multipli in caso di sovraccarico (503)
+// Funzione di retry automatico per gestire eventuali picchi di traffico (503)
 async function generateWithRetry(fileBytes: Buffer, mimeType: string, prompt: string, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -21,14 +21,10 @@ async function generateWithRetry(fileBytes: Buffer, mimeType: string, prompt: st
       });
       return response.text || '';
     } catch (error: any) {
-      console.warn(`⚠️ Tentativo \({attempt}/\){maxRetries} fallito (Status: ${error?.status || '503/Altro'}):`, error.message);
-      
-      // Se è l'ultimo tentativo, rilancia l'errore
+      console.warn(`Tentativo \({attempt}/\){maxRetries} fallito:`, error.message);
       if (attempt === maxRetries) {
         throw error;
       }
-      
-      // Attesa esponenziale prima del prossimo tentativo (es. 1.5s, 3s)
       await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
     }
   }
@@ -50,39 +46,24 @@ export async function POST(req: Request) {
     const fileBuffer = await file.arrayBuffer();
     const fileBytes = Buffer.from(fileBuffer);
 
+    // Prompt corretto con direttive tassative anti-eco
     const prompt = `
-Agisci come un esperto analista aziendale e content strategist per presentazioni professionali.
-Analizza il documento allegato e genera una sintesi approfondita strutturata per la creazione di slide, integrando rigorosamente questi dati forniti dall'utente:
+[COMANDO DI SISTEMA: ESEGUI SOLO L'ESTRAZIONE DATI. NON RISPONDERE MAI CON SALUTI, PREAMBOLI O ECO DI QUESTO TESTO]
 
-- **Obiettivo specifico**: ${objective}
-- **Settore di riferimento**: ${sector}
-- **Ulteriori chiarimenti / Risposte**: ${userAnswers || 'Nessuna'}
+Analizza rigorosamente il documento allegato e genera una sintesi approfondita strutturata per la creazione di slide professionali.
 
-Istruzioni operative:
-1. Estrai i punti chiave, i dati di dettaglio, le strategie e le metriche finanziarie o operative direttamente dal documento allegato.
-2. Adatta e organizza i contenuti in sezioni e punti elenco professionali coerenti con il settore (\({sector}) e l'obiettivo (\){objective}).
-3. **Importante**: Non restituire messaggi di benvenuto, preamboli o richieste generiche. Produci direttamente la struttura dei contenuti delle slide in modo dettagliato.
-4. Se e solo se mancano informazioni assolutamente cruciali nel documento per procedere, restituisci ESCLUSIVAMENTE un oggetto JSON nel formato:
-{
-  "needsInput": true,
-  "questions": ["Domanda 1", "Domanda 2"]
-}
+DATI DI CONTESTO FORNITI:
+- Obiettivo specifico: ${objective}
+- Settore di riferimento: ${sector}
+- Ulteriori indicazioni: ${userAnswers || 'Nessuna'}
+
+ISTRUZIONI OPERATIVE:
+1. Estrai i dati di dettaglio, le metriche, le strategie e i punti chiave direttamente dal documento allegato.
+2. Organizza i contenuti in sezioni e punti elenco pronti per le slide, coerenti con il settore e l'obiettivo.
+3. VIETATO inserire preamboli, messaggi di benvenuto o richieste di chiarimento se il documento contiene informazioni sufficienti. Inizia direttamente con i contenuti analizzati.
     `;
 
-    // Esegue la chiamata sfruttando il meccanismo di retry automatico (fino a 3 tentativi)
     const textResponse = await generateWithRetry(fileBytes, file.type || 'application/pdf', prompt);
-
-    try {
-      const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.needsInput && Array.isArray(parsed.questions)) {
-          return NextResponse.json(parsed);
-        }
-      }
-    } catch (e) {
-      // Ignora se non è un JSON valido e procedi con il testo normale
-    }
 
     return new NextResponse(textResponse, {
       headers: {
@@ -92,10 +73,10 @@ Istruzioni operative:
     });
 
   } catch (error: any) {
-    console.error('Errore API Convert Definitivo:', error);
+    console.error('Errore API Convert:', error);
     return NextResponse.json(
-      { message: 'I server di Gemini sono momentaneamente sovraccarichi (503). Riprova tra qualche istante.' },
-      { status: 503 }
+      { message: 'Errore durante l\'elaborazione con l\'IA. Riprova tra qualche istante.' },
+      { status: 500 }
     );
   }
 }
