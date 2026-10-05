@@ -51,7 +51,7 @@ async function callGeminiWithRetry(base64Data: string, mimeType: string, promptT
 }
 
 /**
- * Funzione di fallback che interroga Groq API se Gemini non risponde in tempo o è sovraccarico.
+ * Funzione di fallback che interroga Groq API con un modello stabile e compatibile.
  */
 async function callGroqFallback(fileName: string, promptText: string) {
   const apiKey = process.env.GROQ_API_KEY;
@@ -67,7 +67,7 @@ async function callGroqFallback(fileName: string, promptText: string) {
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-70b-versatile',
       messages: [
         { role: 'system', content: 'Sei un assistente esperto nella strutturazione di presentazioni professionali.' },
         { role: 'user', content: `Il documento si chiama "\({fileName}".\){promptText}` }
@@ -109,7 +109,7 @@ Estrai i punti chiave suddividendoli in slide chiare, con titoli e punti elenco 
       // 1. Tenta la generazione con Gemini
       resultText = await callGeminiWithRetry(base64Data, mimeType, prompt, 90000);
     } catch (geminiError: any) {
-      // 2. Se Gemini fallisce o scade il tempo, attiva immediatamente il fallback gratuito su Groq
+      // 2. Se Gemini fallisce o scade il tempo, attiva il fallback gratuito su Groq
       console.warn('Gemini non disponibile o timeout scaduto. Reindirizzamento a Groq...');
       resultText = await callGroqFallback(file.name, prompt);
     }
