@@ -93,6 +93,9 @@ export async function POST(req: Request) {
     // ====================================================
     // STEP 4: SCELTA OUTPUT & GENERAZIONE CON I 3 PILASTRI
     // ====================================================
+    // Pulizia delle stringhe condizionali per evitare errori di parsing nel template literal
+    const userNotesSection = userAnswers ? `\nInformazioni integrative fornite dall'utente: ${userAnswers}` : '';
+
     const step4Prompt = `
 Agisci come un consulente strategico senior. Devi valutare se le informazioni attuali sono sufficienti o se mancano dettagli critici.
 I 3 pilastri fondamentali da considerare sono:
@@ -100,7 +103,7 @@ I 3 pilastri fondamentali da considerare sono:
 2. SETTORE DI RIFERIMENTO: "${sector}"
 3. SINTESI CHIAVE DEL DOCUMENTO:
 ${synthesisText}
-${{userAnswers ? `\nInformazioni integrative fornite dall'utente:\){userAnswers}` : ''}
+${userNotesSection}
 
 REGOLA CRITICA PER LA DIALOGO UTENTE:
 Se ritieni che manchino indicazioni fondamentali o dati strategici per personalizzare al meglio il lavoro, NON inventarli ma restituisci un oggetto JSON con questo formato esatto:
