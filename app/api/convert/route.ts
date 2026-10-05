@@ -18,32 +18,26 @@ export async function POST(req: Request) {
     const fileBuffer = await file.arrayBuffer();
     const fileBytes = Buffer.from(fileBuffer);
 
-    // Prompt strutturato secondo le direttive del workflow (Punto 1)
+    // Prompt corretto e rigoroso per evitare che l'IA ripeta le istruzioni
     const prompt = `
-Sei l'assistente IA di DocuDecky. Il tuo compito è analizzare il documento caricato ed estrarre i dati di dettaglio e la sintesi chiave combinandoli con i seguenti dati di contesto:
+Agisci come un esperto analista aziendale e content strategist per presentazioni professionali.
+Analizza il documento allegato e genera una sintesi approfondita strutturata per la creazione di slide, integrando rigorosamente questi dati forniti dall'utente:
 
-1. **Obiettivo specifico**: ${objective}
-2. **Settore di riferimento**: ${sector}
-3. **Ulteriori chiarimenti / Risposte dell'utente**: ${userAnswers || 'Nessuno finora'}
+- **Obiettivo specifico**: ${objective}
+- **Settore di riferimento**: ${sector}
+- **Ulteriori chiarimenti / Risposte**: ${userAnswers || 'Nessuna'}
 
-Istruzioni per l'analisi (Punto 1 del workflow):
-- Leggi attentamente il documento allegato.
-- Estrai i dati di dettaglio, le strategie chiave, i risultati, le metriche e i dati finanziari rilevanti.
-- Collega le informazioni estratte all'obiettivo e al settore specificati.
-
-Se ritieni che manchino informazioni fondamentali per procedere con una presentazione di alta qualità, restituisci ESCLUSIVAMENTE un oggetto JSON in questo formato esatto (senza altri testi attorno):
+Istruzioni operative:
+1. Estrai i punti chiave, i dati di dettaglio, le strategie e le metriche finanziarie o operative direttamente dal documento allegato.
+2. Adatta e organizza i contenuti in sezioni e punti elenco professionali coerenti con il settore (\({sector}) e l'obiettivo (\){objective}).
+3. **Importante**: Non restituire messaggi di benvenuto, preamboli o richieste generiche. Produci direttamente la struttura dei contenuti delle slide in modo dettagliato.
+4. Se e solo se mancano informazioni assolutamente cruciali nel documento per procedere, restituisci ESCLUSIVAMENTE un oggetto JSON nel formato:
 {
   "needsInput": true,
-  "questions": [
-    "Domanda specifica 1 per chiarire un punto mancante",
-    "Domanda specifica 2..."
-  ]
+  "questions": ["Domanda 1", "Domanda 2"]
 }
-
-Se invece hai tutte le informazioni necessarie, genera una sintesi approfondita e strutturata dei contenuti che andranno a comporre le slide.
     `;
 
-    // Chiamata all'API Gemini utilizzando il modello supportato
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
@@ -59,7 +53,7 @@ Se invece hai tutte le informazioni necessarie, genera una sintesi approfondita 
 
     const textResponse = response.text || '';
 
-    // Verifica se l'IA richiede ulteriori input dall'utente
+    // Verifica se l'IA richiede input aggiuntivi tramite JSON
     try {
       const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -69,10 +63,10 @@ Se invece hai tutte le informazioni necessarie, genera una sintesi approfondita 
         }
       }
     } catch (e) {
-      // Se non è JSON valido, procediamo con il flusso standard
+      // Ignora se non è un JSON valido e procedi con il testo normale
     }
 
-    // Risposta di successo con i dati elaborati
+    // Restituisce la sintesi strutturata per le slide
     return new NextResponse(textResponse, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
@@ -83,7 +77,7 @@ Se invece hai tutte le informazioni necessarie, genera una sintesi approfondita 
   } catch (error: any) {
     console.error('Errore API Convert:', error);
     return NextResponse.json(
-      { message: error.message || 'Errore interno durante l\'elaborazione con l\'IA' },
+      { message: error.message || 'Errore interno durante l\'elaborazione' },
       { status: 500 }
     );
   }
