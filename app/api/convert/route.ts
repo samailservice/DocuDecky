@@ -100,7 +100,7 @@ I 3 pilastri fondamentali da considerare sono:
 2. SETTORE DI RIFERIMENTO: "${sector}"
 3. SINTESI CHIAVE DEL DOCUMENTO:
 ${synthesisText}
-\({userAnswers ? `\nInformazioni integrative fornite dall'utente:\){userAnswers}` : ''}
+${{userAnswers ? `\nInformazioni integrative fornite dall'utente:\){userAnswers}` : ''}
 
 REGOLA CRITICA PER LA DIALOGO UTENTE:
 Se ritieni che manchino indicazioni fondamentali o dati strategici per personalizzare al meglio il lavoro, NON inventarli ma restituisci un oggetto JSON con questo formato esatto:
