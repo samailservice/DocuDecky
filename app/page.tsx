@@ -4,14 +4,14 @@ import React, { useState } from 'react';
 
 export default function Page() {
   const [loading, setLoading] = useState(false);
-  const [questions, setQuestions] = useState([]);
+  const [questions, setQuestions] = useState<string[]>([]);
   const [answers, setAnswers] = useState('');
-  const [file, setFile] = useState(null);
+  const [file, setFile] = useState<File | null>(null);
   const [sector, setSector] = useState('Business / Aziendale');
   const [objective, setObjective] = useState('Presentazione PPTX');
   const [statusText, setStatusText] = useState('');
 
-  const handleConvert = async (e: React.FormEvent) => {
+  const handleConvert = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setStatusText('Elaborazione in corso...');
@@ -69,87 +69,89 @@ export default function Page() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
-      <div className="max-w-xl w-full bg-white rounded-2xl shadow-xl p-8 border border-slate-100">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 text-indigo-600 mb-4">
-            <Sparkles className="w-8 h-8" />
+    <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+      <div className="max-w-xl w-full bg-white p-8 rounded-xl shadow-md">
+        <h1 className="text-2xl font-bold mb-4 text-gray-800 flex items-center gap-2">
+          ✨ DocuDecky AI
+        </h1>
+        
+        {questions.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg mb-4">
+            <h2 className="font-semibold text-amber-800 mb-2">L'IA richiede chiarimenti:</h2>
+            <ul className="list-disc pl-5 mb-4 text-sm text-amber-700">
+              {questions.map((q, idx) => (
+                <li key={idx}>{q}</li>
+              ))}
+            </ul>
+            <textarea
+              className="w-full p-2 border rounded mb-2 text-sm text-gray-700"
+              rows={3}
+              placeholder="Scrivi qui le tue risposte..."
+              value={answers}
+              onChange={(e) => setAnswers(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const form = document.getElementById('convert-form') as HTMLFormElement;
+                if (form) form.requestSubmit();
+              }}
+              className="bg-purple-600 text-white px-4 py-2 rounded text-sm hover:bg-purple-700"
+            >
+              Invia risposte e continua
+            </button>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">DocuDecky AI</h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Trascina un documento e trasformalo in una presentazione professionale.
-          </p>
-        </div>
+        )}
 
-        <form onSubmit={handleConvert} className="space-y-6">
+        <form id="convert-form" onSubmit={handleConvert} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Carica Documento (PDF, TXT, DOCX)
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+              📁 Carica Documento (PDF, TXT, DOCX)
             </label>
-            <div className="flex items-center justify-center w-full">
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 transition">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6 px-4 text-center">
-                  <Upload className="w-8 h-8 mb-2 text-slate-400" />
-                  <p className="text-sm text-slate-600">
-                    {file ? (
-                      <span className="font-semibold text-indigo-600">{file.name}</span>
-                    ) : (
-                      'Clicca o trascina il file qui'
-                    )}
-                  </p>
-                </div>
-                <input
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => e.target.files && setFile(e.target.files[0])}
-                  accept=".pdf,.txt,.docx,.doc"
-                />
-              </label>
-            </div>
+            <input 
+              type="file" 
+              required 
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100" 
+            />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Settore</label>
-            <select
+            <label className="block text-sm font-medium text-gray-700 mb-1">Settore</label>
+            <select 
               value={sector}
               onChange={(e) => setSector(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-700 bg-white"
+              className="w-full p-2 border rounded-md text-sm text-gray-800 bg-white"
             >
               <option value="Business / Aziendale">Business / Aziendale</option>
-              <option value="Educativo / Accademico">Educativo / Accademico</option>
-              <option value="Tecnologico / Startup">Tecnologico / Startup</option>
-              <option value="Creativo / Marketing">Creativo / Marketing</option>
+              <option value="Tecnologia">Tecnologia</option>
+              <option value="Sanità">Sanità</option>
+              <option value="Energia">Energia</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Obiettivo</label>
-            <select
+            <label className="block text-sm font-medium text-gray-700 mb-1">Obiettivo</label>
+            <input 
+              type="text" 
               value={objective}
               onChange={(e) => setObjective(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-700 bg-white"
-            >
-              <option value="Presentazione PPTX">Presentazione PPTX</option>
-              <option value="Pitch Deck">Pitch Deck</option>
-              <option value="Riassunto Esecutivo">Riassunto Esecutivo</option>
-            </select>
+              className="w-full p-2 border rounded-md text-sm text-gray-800" 
+            />
           </div>
 
           <button
             type="submit"
-            disabled={!file || loading}
-            className="w-full bg-indigo-600 text-white font-medium py-3 px-4 rounded-xl hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-indigo-100"
+            disabled={loading}
+            className="w-full bg-purple-600 text-white py-2 px-4 rounded-md font-medium hover:bg-purple-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>{statusText}</span>
+                <span className="animate-spin">⏳</span>
+                {statusText || 'Analisi IA e generazione in corso...'}
               </>
             ) : (
-              <>
-                <Sparkles className="w-5 h-5" />
-                <span>Genera Presentazione</span>
-              </>
+              <>✨ Genera Presentazione</>
             )}
           </button>
         </form>
