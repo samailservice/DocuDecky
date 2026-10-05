@@ -3,6 +3,38 @@ import { GoogleGenAI } from '@google/genai';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+// Funzione di supporto per gestire i tentativi multipli in caso di sovraccarico (503)
+async function generateWithRetry(fileBytes: Buffer, mimeType: string, prompt: string, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: [
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: fileBytes.toString('base64'),
+            },
+          },
+          prompt,
+        ],
+      });
+      return response.text || '';
+    } catch (error: any) {
+      console.warn(`⚠️ Tentativo \({attempt}/\){maxRetries} fallito (Status: ${error?.status || '503/Altro'}):`, error.message);
+      
+      // Se è l'ultimo tentativo, rilancia l'errore
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Attesa esponenziale prima del prossimo tentativo (es. 1.5s, 3s)
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+    }
+  }
+  throw new Error('Superato il limite massimo di tentativi con Gemini.');
+}
+
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
@@ -18,7 +50,6 @@ export async function POST(req: Request) {
     const fileBuffer = await file.arrayBuffer();
     const fileBytes = Buffer.from(fileBuffer);
 
-    // Prompt corretto e rigoroso per evitare che l'IA ripeta le istruzioni
     const prompt = `
 Agisci come un esperto analista aziendale e content strategist per presentazioni professionali.
 Analizza il documento allegato e genera una sintesi approfondita strutturata per la creazione di slide, integrando rigorosamente questi dati forniti dall'utente:
@@ -38,22 +69,9 @@ Istruzioni operative:
 }
     `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: [
-        {
-          inlineData: {
-            mimeType: file.type || 'application/pdf',
-            data: fileBytes.toString('base64'),
-          },
-        },
-        prompt,
-      ],
-    });
+    // Esegue la chiamata sfruttando il meccanismo di retry automatico (fino a 3 tentativi)
+    const textResponse = await generateWithRetry(fileBytes, file.type || 'application/pdf', prompt);
 
-    const textResponse = response.text || '';
-
-    // Verifica se l'IA richiede input aggiuntivi tramite JSON
     try {
       const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -66,7 +84,6 @@ Istruzioni operative:
       // Ignora se non è un JSON valido e procedi con il testo normale
     }
 
-    // Restituisce la sintesi strutturata per le slide
     return new NextResponse(textResponse, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
@@ -75,10 +92,10 @@ Istruzioni operative:
     });
 
   } catch (error: any) {
-    console.error('Errore API Convert:', error);
+    console.error('Errore API Convert Definitivo:', error);
     return NextResponse.json(
-      { message: error.message || 'Errore interno durante l\'elaborazione' },
-      { status: 500 }
+      { message: 'I server di Gemini sono momentaneamente sovraccarichi (503). Riprova tra qualche istante.' },
+      { status: 503 }
     );
   }
 }
