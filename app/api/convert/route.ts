@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     const sector = (formData.get('sector') as string) || 'Business / Aziendale';
     const objective = (formData.get('objective') as string) || 'Presentazione PPTX';
     const outputFormat = (formData.get('format') as string) || 'pptx';
-    const userAnswers = (formData.get('userAnswers') as string) || ''; // Eventuali risposte fornite dall'utente alla finestra di dialogo
+    const userAnswers = (formData.get('userAnswers') as string) || '';
 
     if (!file) {
       return NextResponse.json({ message: 'Nessun file caricato' }, { status: 400 });
@@ -120,7 +120,6 @@ Se invece hai tutte le informazioni necessarie per procedere, genera la struttur
 
     const { text: aiResponse } = await callAIWithWorkflow(step4Prompt);
 
-    // Controllo se l'IA richiede un input interattivo tramite finestra di dialogo
     if (aiResponse.trim().startsWith('{') && aiResponse.includes('needsInput')) {
       try {
         const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
@@ -134,7 +133,7 @@ Se invece hai tutte le informazioni necessarie per procedere, genera la struttur
           }
         }
       } catch (e) {
-        // Se il parsing JSON fallisce, prosegue normalmente con la generazione
+        // Ignora e prosegue se il parsing fallisce
       }
     }
 
