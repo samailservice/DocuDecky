@@ -4,14 +4,12 @@ import React, { useState } from 'react';
 import { Upload, Sparkles, Loader2, ShieldCheck, Zap, User, Lock, Mail, ArrowRight, LogOut } from 'lucide-react';
 
 export default function Home() {
-  // Stati di Autenticazione
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
 
-  // Stati del Tool di Conversione
   const [file, setFile] = useState(null);
   const [sector, setSector] = useState('Business / Aziendale');
   const [objective, setObjective] = useState('Presentazione PPTX');
@@ -79,5 +77,3 @@ export default function Home() {
 
   if (!isAuthenticated) {
     return (
-      
-        {/* Navbar */}
