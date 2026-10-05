@@ -10,6 +10,14 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState('');
 
+  const res = await fetch('/api/convert', { method: 'POST', body: formData });
+  const data = await res.json();
+
+if (data.needsInput) {
+  // Apri la tua finestra di dialogo / modale con le domande ricevute in data.questions
+  // Quando l'utente risponde, rieffettua la chiamata inviando anche il campo 'userAnswers' nel FormData
+}
+
   const handleConvert = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!file) return;
