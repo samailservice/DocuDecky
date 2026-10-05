@@ -5,10 +5,6 @@ import pptxgen from 'pptxgenjs';
 // Inizializza il client Google GenAI
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-/**
- * Esegue la chiamata a Gemini con tentativi automatici.
- * Timeout configurato a 90 secondi per lasciare spazio al fallback su Groq prima del limite di Vercel.
- */
 async function callGeminiWithRetry(base64Data: string, mimeType: string, promptText: string, timeoutMs = 90000) {
   const startTime = Date.now();
   let attempt = 0;
@@ -42,7 +38,6 @@ async function callGeminiWithRetry(base64Data: string, mimeType: string, promptT
         throw new Error('TIMEOUT_EXCEEDED');
       }
 
-      // Backoff esponenziale rapido (max 15 secondi tra i tentativi)
       const delay = Math.min(1000 * Math.pow(2, attempt), 15000);
       console.warn(`[Gemini Tentativo \({attempt}] Server occupato o errore. Nuovo tentativo tra\){delay / 1000}s...`);
       await new Promise((resolve) => setTimeout(resolve, delay));
@@ -51,7 +46,7 @@ async function callGeminiWithRetry(base64Data: string, mimeType: string, promptT
 }
 
 /**
- * Funzione di fallback che interroga Groq API con il modello standard supportato ovunque.
+ * Funzione di fallback che interroga Groq API con il modello classico e universale llama3-8b-8192.
  */
 async function callGroqFallback(fileName: string, promptText: string) {
   const apiKey = process.env.GROQ_API_KEY;
@@ -67,7 +62,7 @@ async function callGroqFallback(fileName: string, promptText: string) {
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.1-8b-instant',
+      model: 'llama3-8b-8192',
       messages: [
         { role: 'system', content: 'Sei un assistente esperto nella strutturazione di presentazioni professionali.' },
         { role: 'user', content: `Il documento si chiama "\({fileName}".\){promptText}` }
@@ -106,15 +101,12 @@ Estrai i punti chiave suddividendoli in slide chiare, con titoli e punti elenco 
     let resultText = '';
 
     try {
-      // 1. Tenta la generazione con Gemini
       resultText = await callGeminiWithRetry(base64Data, mimeType, prompt, 90000);
     } catch (geminiError: any) {
-      // 2. Se Gemini fallisce o scade il tempo, attiva il fallback gratuito su Groq
       console.warn('Gemini non disponibile o timeout scaduto. Reindirizzamento a Groq...');
       resultText = await callGroqFallback(file.name, prompt);
     }
 
-    // Generazione del file PowerPoint (.pptx)
     const pptx = new pptxgen();
     
     const slide = pptx.addSlide();
