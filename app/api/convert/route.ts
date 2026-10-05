@@ -5,9 +5,9 @@ import pptxgen from 'pptxgenjs';
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 /**
- * STEP 2: Sintesi Agente AI con logica esatta del workflow
+ * STEP 2: Sintesi Agente AI con logica del workflow
  * - Loop su Gemini (Fallimento < 3 volte)
- * - Switch su Groq (Fallimento >= 3 volte)
+ * - Switch su Groq (Fallimento >= 3 volte) con il modello attivo openai/gpt-oss-20b
  */
 async function getAISynthesisWithWorkflow(promptText: string): Promise<{ provider: string; text: string }> {
   let attempt = 0;
@@ -31,7 +31,6 @@ async function getAISynthesisWithWorkflow(promptText: string): Promise<{ provide
         console.warn('[Step 2] Fallimento >= 3 volte su Gemini. Switch automatico su Groq...');
         break;
       }
-      // Attesa breve prima del prossimo tentativo nel loop
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
@@ -42,7 +41,7 @@ async function getAISynthesisWithWorkflow(promptText: string): Promise<{ provide
     throw new Error('Gemini non disponibile dopo 3 tentativi e chiave API Groq (GROQ_API_KEY) non configurata.');
   }
 
-  console.log('[Step 2] Switch su Groq (llama-3.1-8b-instant) in corso...');
+  console.log('[Step 2] Switch su Groq (openai/gpt-oss-20b) in corso...');
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -50,7 +49,7 @@ async function getAISynthesisWithWorkflow(promptText: string): Promise<{ provide
       'Authorization': `Bearer ${groqApiKey}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.1-8b-instant',
+      model: 'openai/gpt-oss-20b',
       messages: [
         { role: 'system', content: 'Sei un analista aziendale esperto nella sintesi di documenti.' },
         { role: 'user', content: promptText }
@@ -77,7 +76,7 @@ export async function POST(req: Request) {
     const file = formData.get('file') as File;
     const sector = (formData.get('sector') as string) || 'Business / Aziendale';
     const objective = (formData.get('objective') as string) || 'Presentazione PPTX';
-    const outputFormat = (formData.get('format') as string) || 'pptx'; // 'pptx' o 'docx'
+    const outputFormat = (formData.get('format') as string) || 'pptx';
 
     if (!file) {
       return NextResponse.json({ message: 'Nessun file caricato' }, { status: 400 });
@@ -113,7 +112,6 @@ ${synthesisText}
     // STEP 4 & 5: SCELTA OUTPUT & DOWNLOAD AUTOMATICO
     // ====================================================
     if (outputFormat === 'docx' || objective.toLowerCase().includes('docx') || objective.toLowerCase().includes('pitch')) {
-      // Diramazione: Generazione Documento / Pitch (.docx)
       const docBuffer = Buffer.from(`REPORT DI SINTESI / PITCH\nMotore IA: \({provider}\nSettore:\){sector}\n\n${finalContent}`, 'utf-8');
       return new NextResponse(docBuffer, {
         headers: {
@@ -122,7 +120,6 @@ ${synthesisText}
         },
       });
     } else {
-      // Diramazione: Generazione Presentazione Grafica (.pptx)
       const pptx = new pptxgen();
       
       const coverSlide = pptx.addSlide();
