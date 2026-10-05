@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Upload, Sparkles, Loader2, ShieldCheck, Zap, Presentation, User, Lock, Mail, ArrowRight, LogOut } from 'lucide-react';
+import { Upload, Sparkles, Loader2, ShieldCheck, Zap, User, Lock, Mail, ArrowRight, LogOut } from 'lucide-react';
 
 export default function Home() {
   // Stati di Autenticazione
@@ -20,7 +20,6 @@ export default function Home() {
 
   const handleAuth = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulazione di registrazione / login riuscita (gratuita)
     if (!email || !password) {
       alert('Compila tutti i campi obbligatori.');
       return;
@@ -78,7 +77,6 @@ export default function Home() {
     }
   };
 
-  // Se l'utente NON è autenticato: mostra la Landing Page con spiegazione e form di registrazione/login
   if (!isAuthenticated) {
     return (
       
