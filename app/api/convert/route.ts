@@ -114,10 +114,9 @@ export async function POST(req: Request) {
     slide.addText(`Presentazione: ${file.name}`, { x: 1, y: 1, fontSize: 22, bold: true, color: '363636' });
     slide.addText(resultText.substring(0, 1000), { x: 1, y: 2, fontSize: 13, color: '555555', w: '80%' });
 
-    // Modificato in 'arraybuffer' per soddisfare i requisiti TypeScript di Next.js (BodyInit)
     const pptxBuffer = await pptx.write({ outputType: 'arraybuffer' });
 
-    return new NextResponse(pptxBuffer, {
+    return new NextResponse(pptxBuffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         'Content-Disposition': `attachment; filename="${file.name.split('.')[0] || 'documento'}-presentazione.pptx"`,
