@@ -51,7 +51,7 @@ async function callGeminiWithRetry(base64Data: string, mimeType: string, promptT
 }
 
 /**
- * Funzione di fallback che interroga Groq API con il modello attuale supportato.
+ * Funzione di fallback che interroga Groq API con il modello standard supportato ovunque.
  */
 async function callGroqFallback(fileName: string, promptText: string) {
   const apiKey = process.env.GROQ_API_KEY;
@@ -67,7 +67,7 @@ async function callGroqFallback(fileName: string, promptText: string) {
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       messages: [
         { role: 'system', content: 'Sei un assistente esperto nella strutturazione di presentazioni professionali.' },
         { role: 'user', content: `Il documento si chiama "\({fileName}".\){promptText}` }
