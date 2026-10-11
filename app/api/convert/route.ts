@@ -34,7 +34,6 @@ async function generateWithRetry(contents: any, maxRetries = 3) {
 export async function POST(req: Request) {
   let tempFile1: string | null = null;
   let tempFile2: string | null = null;
-  let tempFile3: string | null = null;
 
   try {
     const formData = await req.formData();
@@ -52,7 +51,7 @@ export async function POST(req: Request) {
     const tempDir = os.tmpdir();
 
     // =========================================================================
-    // STEP 1: Estrazione dati e sintesi dal documento
+    // STEP 1: Estrazione dati e sintesi avanzata
     // =========================================================================
     const prompt1 = [
       {
@@ -61,7 +60,7 @@ export async function POST(req: Request) {
           data: fileBytes.toString('base64'),
         },
       },
-      `Sei un analista aziendale esperto. Analizza il documento allegato estraendo tutti i dati chiave, metriche, bilanci e strategie.
+      `Sei un analista aziendale esperto. Analizza il documento allegato estraendo tutti i dati chiave, metriche, bilanci e strategie (es. ricavi, costi operativi, stato patrimoniale, KPI).
       Contesto:
       - Obiettivo: ${objective}
       - Settore: ${sector}
@@ -70,170 +69,206 @@ export async function POST(req: Request) {
     ];
 
     const rawAnalysisText = await generateWithRetry(prompt1);
-
     tempFile1 = path.join(tempDir, `docudecky-step1-${Date.now()}.txt`);
     await fs.writeFile(tempFile1, rawAnalysisText, 'utf-8');
     const contentStep1 = await fs.readFile(tempFile1, 'utf-8');
 
     // =========================================================================
-    // STEP 2: Creazione della struttura iniziale delle slide
+    // STEP 2: Generazione JSON Strutturato per Layout Visivo e Grafici
     // =========================================================================
-    const prompt2 = `
-    Basandoti esclusivamente sui dati di sintesi contenuti nel testo sottostante, suddividi i contenuti in esattamente 6-7 sezioni/slide.
-    Usa rigorosamente questo formato per ogni slide:
-    === SLIDE N: [Titolo della Slide] ===
-    - [Punto elenco 1 con dettagli]
-    - [Punto elenco 2]
+    const promptJson = `
+    Sei un esperto di corporate storytelling e data visualization. 
+    Analizza i dati di sintesi forniti e genera una presentazione professionale compatibile con Google Slide composta da esattamente 6 o 7 slide.
+    
+    Devi restituire **ESCLUSIVAMENTE** un oggetto JSON valido (senza blocchi markdown tipo \`\`\`json) strutturato esattamente così:
 
-    Dati di sintesi:
+    {
+      "slides": [
+        {
+          "title": "Titolo della Slide",
+          "subtitle": "Breve sottotitolo descrittivo",
+          "cards": [
+            {
+              "title": "Titolo Blocco / Metrica",
+              "content": "Testo esplicativo o dettaglio numerico"
+            }
+          ],
+          "chart": {
+            "type": "bar",
+            "title": "Titolo del Grafico",
+            "categories": ["Cat 1", "Cat 2", "Cat 3"],
+            "values": [10, 20, 30]
+          },
+          "comment": "Nota dettagliata per lo speaker."
+        }
+      ]
+    }
+
+    Regole fondamentali:
+    1. Invece di semplici elenchi, organizza i contenuti in 2 o 3 "cards" (oggetti con title e content) per dare un impatto visivo a blocchi.
+    2. Includi l'oggetto "chart" (con tipo "bar" o "pie", categorie e valori numerici reali estratti dal testo) nelle slide che presentano dati finanziari, ripartizioni di costi o ricavi.
+    3. Restituisci SOLO il JSON puro.
+
+    Dati di sintesi di partenza:
     ${contentStep1}
     `;
 
-    const rawStructureText = await generateWithRetry(prompt2);
+    const jsonResponseText = await generateWithRetry(promptJson);
 
     tempFile2 = path.join(tempDir, `docudecky-step2-${Date.now()}.txt`);
-    await fs.writeFile(tempFile2, rawStructureText, 'utf-8');
-    const contentStep2 = await fs.readFile(tempFile2, 'utf-8');
+    await fs.writeFile(tempFile2, jsonResponseText, 'utf-8');
+
+    let cleanJsonStr = jsonResponseText.trim();
+    if (cleanJsonStr.startsWith('```json')) {
+      cleanJsonStr = cleanJsonStr.replace(/^```json/, '').replace(/```$/, '').trim();
+    } else if (cleanJsonStr.startsWith('```')) {
+      cleanJsonStr = cleanJsonStr.replace(/^```/, '').replace(/```$/, '').trim();
+    }
+
+    let presentationData: any;
+    try {
+      presentationData = JSON.parse(cleanJsonStr);
+    } catch (e) {
+      console.error('Errore parsing JSON dall\'IA', e);
+      throw new Error('L\'intelligenza artificiale non ha restituito un formato JSON valido. Riprova.');
+    }
 
     // =========================================================================
-    // STEP 3: Applicazione del prompt richiesto sulla presentazione prodotta
-    // =========================================================================
-    const prompt3 = `
-    Modifica la presentazione utilizzando un layout comune a tutte le slide ed inserendo grafici e commenti inerenti al contenuto di ogni slide. Produci in output una presentazione compatibile con google slide.
-
-    Per consentire la corretta interpretazione tecnica e la generazione nativa dei componenti, mantieni o adatta la struttura inserendo i tag dove necessario:
-    === SLIDE N: [Titolo della Slide] ===
-    - [Punto elenco 1]
-    - [Punto elenco 2]
-    [CHART: bar o pie | Titolo del Grafico | Categoria1,Categoria2,Categoria3 | 100,200,300] (Inseriscilo se sono presenti dati numerici idonei)
-    [COMMENTO: Nota dettagliata o script per il relatore]
-
-    Presentazione prodotta da modificare:
-    ${contentStep2}
-    `;
-
-    const finalOptimizedText = await generateWithRetry(prompt3);
-
-    tempFile3 = path.join(tempDir, `docudecky-step3-${Date.now()}.txt`);
-    await fs.writeFile(tempFile3, finalOptimizedText, 'utf-8');
-    const finalContent = await fs.readFile(tempFile3, 'utf-8');
-
-    // =========================================================================
-    // STEP 4: Generazione del file PowerPoint (.pptx) con parsing dei grafici
+    // STEP 3: Generazione PowerPoint con Card Grafiche e Box Dinamici
     // =========================================================================
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_16x9';
 
-    const slideChunks = finalContent.split('=== SLIDE').filter(Boolean);
+    const slidesArray = presentationData.slides || [];
 
-    if (slideChunks.length === 0) {
+    if (slidesArray.length === 0) {
       const slide = pptx.addSlide();
-      slide.addText(finalContent, { x: 0.8, y: 0.8, w: '85%', h: '80%', fontSize: 14, color: '333333' });
+      slide.addText("Nessun contenuto generato.", { x: 0.8, y: 0.8, w: '85%', h: '80%', fontSize: 14, color: '333333' });
     } else {
-      for (const chunk of slideChunks) {
-        const lines = chunk.split('\n').map((l) => l.trim()).filter(Boolean);
-        const headerLine = lines[0].replace(/^[:=]+/, '').trim();
-        
-        const bulletPoints: string[] = [];
-        let chartConfig: any = null;
-        let slideComment = '';
-
-        for (const line of lines.slice(1)) {
-          if (line.startsWith('[CHART:')) {
-            const match = line.match(/\[CHART:\s*([^\vert{}]+)\Vert{}\s*([^\vert{}]+)\Vert{}\s*([^\vert{}]+)\Vert{}\s*([^\]]+)\]/i);
-            if (match) {
-              const chartTypeInput = match[1].trim().toLowerCase();
-              const chartType = chartTypeInput.includes('pie') ? pptx.ChartType.pie : pptx.ChartType.bar;
-              const chartTitle = match[2].trim();
-              const categories = match[3].split(',').map((c) => c.trim());
-              const values = match[4].split(',').map((v) => parseFloat(v.trim().replace('€', '').replace('M', '')) || 0);
-
-              chartConfig = {
-                type: chartType,
-                data: [
-                  {
-                    name: chartTitle,
-                    labels: categories,
-                    values: values,
-                  },
-                ],
-                options: {
-                  title: chartTitle,
-                  showLegend: true,
-                  legendPos: 'b',
-                },
-              };
-            }
-          } else if (line.startsWith('[COMMENTO:')) {
-            slideComment = line.replace('[COMMENTO:', '').replace(']', '').trim();
-          } else if (line.startsWith('-') || line.startsWith('*')) {
-            bulletPoints.push(line.replace(/^[-*]\s*/, ''));
-          }
-        }
-
+      for (const slideData of slidesArray) {
         const slide = pptx.addSlide();
 
-        // Layout comune del titolo
-        slide.addText(headerLine, {
+        // 1. Header Unificato di Classe Enterprise
+        slide.addText(slideData.title || 'Slide Professionale', {
           x: 0.8,
-          y: 0.6,
+          y: 0.5,
           w: '85%',
-          h: 0.8,
+          h: 0.6,
           fontSize: 22,
           bold: true,
-          color: '4A154B',
+          color: '4A154B', // Branding color
         });
 
-        // Se sono presenti grafici, dividiamo lo spazio tra testo e grafico
-        if (chartConfig && bulletPoints.length > 0) {
-          const formattedBullets = bulletPoints.map((bp) => ({
-            text: bp,
-            options: { bullet: true, fontSize: 13, color: '333333', spaceAfter: 8 },
-          }));
-
-          slide.addText(formattedBullets, {
+        if (slideData.subtitle) {
+          slide.addText(slideData.subtitle, {
             x: 0.8,
-            y: 1.6,
-            w: 5.0,
-            h: 4.5,
+            y: 1.1,
+            w: '85%',
+            h: 0.4,
+            fontSize: 13,
+            color: '666666',
+            italic: true,
           });
-
-          slide.addChart(chartConfig.type, chartConfig.data, {
-            x: 6.2,
-            y: 1.6,
-            w: 6.0,
-            h: 4.5,
-            ...chartConfig.options,
-          });
-        } else {
-          if (bulletPoints.length > 0) {
-            const formattedBullets = bulletPoints.map((bp) => ({
-              text: bp,
-              options: { bullet: true, fontSize: 14, color: '333333', spaceAfter: 10 },
-            }));
-
-            slide.addText(formattedBullets, {
-              x: 0.8,
-              y: 1.6,
-              w: '85%',
-              h: '70%',
-            });
-          }
         }
 
-        // Inserimento note/commenti del relatore
-        if (slideComment) {
-          slide.addNotes(slideComment);
+        const cards: any[] = slideData.cards || [];
+        const hasChart = slideData.chart && slideData.chart.categories && slideData.chart.values;
+
+        // 2. Layout Visivo a Card / Riquadri Colorati + Grafico opzionale
+        if (hasChart) {
+          // Se c'è un grafico: mettiamo le card a sinistra e il grafico a destra
+          let cardY = 1.6;
+          for (const card of cards.slice(0, 3)) {
+            // Disegna il riquadro di sfondo della card
+            slide.addShape(pptx.ShapeType.roundRect, {
+              x: 0.8,
+              y: cardY,
+              w: 5.2,
+              h: 1.1,
+              fill: { color: 'F4F1F5' },
+              line: { color: 'E2D9E4', width: 1 },
+            });
+            // Testo interno alla card
+            slide.addText([
+              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 12, color: '4A154B' } },
+              { text: card.content || '', options: { fontSize: 10, color: '333333' } }
+            ], {
+              x: 1.0,
+              y: cardY + 0.1,
+              w: 4.8,
+              h: 0.9,
+            });
+            cardY += 1.25;
+          }
+
+          // Inserimento grafico nativo a destra
+          const chartType = String(slideData.chart.type).toLowerCase() === 'pie' ? pptx.ChartType.pie : pptx.ChartType.bar;
+          const chartValues = slideData.chart.values.map((v: any) => parseFloat(v) || 0);
+
+          slide.addChart(
+            chartType,
+            [
+              {
+                name: slideData.chart.title || 'Dati',
+                labels: slideData.chart.categories,
+                values: chartValues,
+              },
+            ],
+            {
+              x: 6.4,
+              y: 1.6,
+              w: 5.8,
+              h: 4.8,
+              title: slideData.chart.title || '',
+              showLegend: true,
+              legendPos: 'b',
+            }
+          );
+
+        } else {
+          // Se non c'è grafico, distribuiamo le card in una griglia visiva pulita
+          let startX = 0.8;
+          let startY = 1.6;
+          
+          cards.forEach((card, index) => {
+            const col = index % 2;
+            const row = Math.floor(index / 2);
+            
+            const posX = startX + col * 5.8;
+            const posY = startY + row * 1.8;
+
+            // Box Card di sfondo
+            slide.addShape(pptx.ShapeType.roundRect, {
+              x: posX,
+              y: posY,
+              w: 5.5,
+              h: 1.6,
+              fill: { color: 'F9F8FA' },
+              line: { color: 'E2D9E4', width: 1 },
+            });
+
+            slide.addText([
+              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 13, color: '4A154B' } },
+              { text: card.content || '', options: { fontSize: 11, color: '333333' } }
+            ], {
+              x: posX + 0.2,
+              y: posY + 0.15,
+              w: 5.1,
+              h: 1.3,
+            });
+          });
+        }
+
+        // 3. Aggiunta Note per il Relatore
+        if (slideData.comment) {
+          slide.addNotes(slideData.comment);
         }
       }
     }
 
     const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
 
-    // =========================================================================
-    // STEP 5: Pulizia file temporanei
-    // =========================================================================
-    for (const filePath of [tempFile1, tempFile2, tempFile3]) {
+    for (const filePath of [tempFile1, tempFile2]) {
       if (filePath) {
         try { await fs.unlink(filePath); } catch (e) {}
       }
@@ -242,18 +277,18 @@ export async function POST(req: Request) {
     return new NextResponse(pptxBuffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'Content-Disposition': 'attachment; filename="presentazione-docudecky.pptx"',
+        'Content-Disposition': 'attachment; filename="presentazione-docudecky-visiva.pptx"',
       },
     });
 
   } catch (error: any) {
-    for (const filePath of [tempFile1, tempFile2, tempFile3]) {
+    for (const filePath of [tempFile1, tempFile2]) {
       if (filePath) {
         try { await fs.unlink(filePath); } catch (e) {}
       }
     }
 
-    console.error('Errore API Workflow Tre Step:', error);
+    console.error('Errore API Workflow Visivo:', error);
 
     if (error.message === 'QUOTA_EXHAUSTED' || error?.status === 429) {
       return NextResponse.json(
@@ -263,7 +298,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { message: error.message || 'Errore interno durante il flusso a tre step.' },
+      { message: error.message || 'Errore interno durante la generazione della presentazione.' },
       { status: 500 }
     );
   }
