@@ -7,7 +7,6 @@ import os from 'os';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Funzione di retry avanzata con gestione quota (429) e sovraccarico (503)
 async function generateWithRetry(contents: any, maxRetries = 3) {
   const model = 'gemini-3.8-flash';
 
@@ -53,7 +52,7 @@ export async function POST(req: Request) {
     const tempDir = os.tmpdir();
 
     // =========================================================================
-    // STEP 1: Prima query - Estrazione dati e sintesi dal documento
+    // STEP 1: Estrazione dati e sintesi dal documento
     // =========================================================================
     const prompt1 = [
       {
@@ -77,7 +76,7 @@ export async function POST(req: Request) {
     const contentStep1 = await fs.readFile(tempFile1, 'utf-8');
 
     // =========================================================================
-    // STEP 2: Seconda query - Creazione della struttura iniziale delle slide
+    // STEP 2: Creazione della struttura iniziale delle slide
     // =========================================================================
     const prompt2 = `
     Basandoti esclusivamente sui dati di sintesi contenuti nel testo sottostante, suddividi i contenuti in esattamente 6-7 sezioni/slide.
@@ -97,7 +96,7 @@ export async function POST(req: Request) {
     const contentStep2 = await fs.readFile(tempFile2, 'utf-8');
 
     // =========================================================================
-    // STEP 3: Terza query - Raffinamento layout, grafici e commenti
+    // STEP 3: Raffinamento layout, grafici e commenti
     // =========================================================================
     const prompt3 = `
     Modifica la presentazione utilizzando un layout comune a tutte le slide ed inserendo grafici e commenti inerenti al contenuto di ogni slide. Produci in output una presentazione compatibile con google slide.
@@ -120,7 +119,7 @@ export async function POST(req: Request) {
     const finalContent = await fs.readFile(tempFile3, 'utf-8');
 
     // =========================================================================
-    // STEP 4: Generazione del file PowerPoint (.pptx) con pptxgenjs
+    // STEP 4: Generazione del file PowerPoint (.pptx)
     // =========================================================================
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_16x9';
@@ -141,7 +140,6 @@ export async function POST(req: Request) {
 
         for (const line of lines.slice(1)) {
           if (line.startsWith('[CHART:')) {
-            // Estrazione configurazione grafico es. [CHART: bar | Vendite | Q1,Q2 | 100,200]
             const match = line.match(/\[CHART:\s*([^\vert{}]+)\Vert{}\s*([^\vert{}]+)\Vert{}\s*([^\vert{}]+)\Vert{}\s*([^\]]+)\]/i);
             if (match) {
               const chartType = match[1].trim().toLowerCase() === 'pie' ? pptx.ChartType.pie : pptx.ChartType.bar;
@@ -168,13 +166,12 @@ export async function POST(req: Request) {
           } else if (line.startsWith('[COMMENTO:')) {
             slideComment = line.replace('[COMMENTO:', '').replace(']', '').trim();
           } else if (line.startsWith('-') || line.startsWith('*')) {
-            bulletPoints.add ? bulletPoints.push(line.replace(/^[-*]\s*/, '')) : null;
+            bulletPoints.push(line.replace(/^[-*]\s*/, ''));
           }
         }
 
         const slide = pptx.addSlide();
 
-        // Layout comune coordinato (Titolo unificato in alto)
         slide.addText(headerLine, {
           x: 0.8,
           y: 0.6,
@@ -185,29 +182,28 @@ export async function POST(req: Request) {
           color: '4A154B',
         });
 
-        // Se è presente un grafico, posizioniamo il testo a sinistra e il grafico a destra
         if (chartConfig && bulletPoints.length > 0) {
           const formattedBullets = bulletPoints.map((bp) => ({
             text: bp,
             options: { bullet: true, fontSize: 13, color: '333333', spaceAfter: 8 },
           }));
 
+          // Corretto a valori numerici per rispettare il tipo Coord di pptxgenjs
           slide.addText(formattedBullets, {
             x: 0.8,
             y: 1.6,
-            w: '5.0',
-            h: '70%',
+            w: 5.0,
+            h: 4.5,
           });
 
           slide.addChart(chartConfig.type, chartConfig.data, {
             x: 6.2,
             y: 1.6,
-            w: '6.0',
-            h: '4.5',
+            w: 6.0,
+            h: 4.5,
             ...chartConfig.options,
           });
         } else {
-          // Solo punti elenco a tutta larghezza
           if (bulletPoints.length > 0) {
             const formattedBullets = bulletPoints.map((bp) => ({
               text: bp,
@@ -223,7 +219,6 @@ export async function POST(req: Request) {
           }
         }
 
-        // Aggiunta commenti/note del relatore alla slide
         if (slideComment) {
           slide.addNotes(slideComment);
         }
@@ -233,7 +228,7 @@ export async function POST(req: Request) {
     const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
 
     // =========================================================================
-    // STEP 5: Pulizia automatica di tutti i file temporanei
+    // STEP 5: Pulizia file temporanei
     // =========================================================================
     for (const filePath of [tempFile1, tempFile2, tempFile3]) {
       if (filePath) {
@@ -249,7 +244,6 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    // Pulizia di sicurezza in caso di errore
     for (const filePath of [tempFile1, tempFile2, tempFile3]) {
       if (filePath) {
         try { await fs.unlink(filePath); } catch (e) {}
@@ -260,7 +254,7 @@ export async function POST(req: Request) {
 
     if (error.message === 'QUOTA_EXHAUSTED' || error?.status === 429) {
       return NextResponse.json(
-        { message: 'Hai raggiunto il limite massimo giornaliero di richieste gratuite della chiave API Gemini (20 req/giorno). Riprova domani o usa una chiave a pagamento.' },
+        { message: 'Hai raggiunto il limite massimo giornaliero di richieste gratuite della chiave API Gemini. Riprova domani o usa una chiave a pagamento.' },
         { status: 429 }
       );
     }
