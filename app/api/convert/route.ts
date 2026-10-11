@@ -1,14 +1,10 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import pptxgen from 'pptxgenjs';
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Funzione di retry potenziata con 5 tentativi e attesa incrementale per gestire i 503
-async function generateWithRetry(contents: any, maxRetries = 5) {
+async function generateWithRetry(contents: any, maxRetries = 4) {
   const model = 'gemini-3.8-flash';
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -26,17 +22,13 @@ async function generateWithRetry(contents: any, maxRetries = 5) {
       }
 
       if (attempt === maxRetries) throw error;
-      // Attesa progressiva più lunga (es. 3.5s, 7s, 10.5s, 14s) per smaltire il picco 503
-      await new Promise((resolve) => setTimeout(resolve, attempt * 3500));
+      await new Promise((resolve) => setTimeout(resolve, attempt * 2500));
     }
   }
   throw new Error('Superato il limite massimo di tentativi con Gemini.');
 }
 
 export async function POST(req: Request) {
-  let tempFile1: string | null = null;
-  let tempFile2: string | null = null;
-
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
@@ -50,75 +42,55 @@ export async function POST(req: Request) {
 
     const fileBuffer = await file.arrayBuffer();
     const fileBytes = Buffer.from(fileBuffer);
-    const tempDir = os.tmpdir();
 
     // =========================================================================
-    // STEP 1: Estrazione dati e sintesi avanzata
+    // CHIAMATA UNICA OTTIMIZZATA (Consuma 1 sola richiesta API)
     // =========================================================================
-    const prompt1 = [
+    const prompt = [
       {
         inlineData: {
           mimeType: file.type || 'application/pdf',
           data: fileBytes.toString('base64'),
         },
       },
-      `Sei un analista aziendale esperto. Analizza il documento allegato estraendo tutti i dati chiave, metriche, bilanci e strategie.
-      Contesto:
+      `Sei un analista aziendale e un esperto di corporate storytelling. Analizza il documento allegato estraendo i dati chiave e genera una presentazione professionale compatibile con Google Slide composta da esattamente 6 o 7 slide.
+      
+      Contesto utente:
       - Obiettivo: ${objective}
       - Settore: ${sector}
       - Note: ${userAnswers || 'Nessuna'}
-      Restituisci esclusivamente la sintesi analitica dettagliata, senza preamboli.`
+
+      Devi restituire **ESCLUSIVAMENTE** un oggetto JSON valido (senza blocchi markdown tipo \`\`\`json) strutturato esattamente così:
+
+      {
+        "slides": [
+          {
+            "title": "Titolo della Slide",
+            "subtitle": "Sottotitolo chiaro ed esplicativo",
+            "cards": [
+              {
+                "title": "Titolo del Blocco / Metrica",
+                "content": "Testo descrittivo dettagliato o valore numerico"
+              }
+            ],
+            "chart": {
+              "type": "bar",
+              "title": "Titolo del Grafico",
+              "categories": ["Cat 1", "Cat 2", "Cat 3"],
+              "values": [10, 20, 30]
+            },
+            "comment": "Nota dettagliata per il relatore."
+          }
+        ]
+      }
+
+      Regole fondamentali:
+      1. Struttura i contenuti di ogni slide in 2 o 3 "cards" (oggetti con title e content).
+      2. Includi l'oggetto "chart" (con tipo "bar" o "pie", categorie e valori numerici reali) nelle slide che presentano dati finanziari, costi o ricavi. Nelle altre slide ometti completamente la chiave "chart".
+      3. Restituisci SOLO il JSON puro.`
     ];
 
-    const rawAnalysisText = await generateWithRetry(prompt1);
-    tempFile1 = path.join(tempDir, `docudecky-step1-${Date.now()}.txt`);
-    await fs.writeFile(tempFile1, rawAnalysisText, 'utf-8');
-    const contentStep1 = await fs.readFile(tempFile1, 'utf-8');
-
-    // =========================================================================
-    // STEP 2: Generazione JSON Strutturato di Livello Professionale
-    // =========================================================================
-    const promptJson = `
-    Sei un esperto di corporate storytelling e data visualization. 
-    Analizza i dati di sintesi forniti e genera una presentazione professionale compatibile con Google Slide composta da esattamente 6 o 7 slide.
-    
-    Devi restituire **ESCLUSIVAMENTE** un oggetto JSON valido (senza blocchi markdown tipo \`\`\`json) strutturato esattamente così:
-
-    {
-      "slides": [
-        {
-          "title": "Titolo della Slide",
-          "subtitle": "Sottotitolo chiaro ed esplicativo del concetto chiave",
-          "cards": [
-            {
-              "title": "Titolo del Blocco / Metrica",
-              "content": "Testo descrittivo dettagliato o valore numerico"
-            }
-          ],
-          "chart": {
-            "type": "bar",
-            "title": "Titolo del Grafico",
-            "categories": ["Cat 1", "Cat 2", "Cat 3"],
-            "values": [10, 20, 30]
-          },
-          "comment": "Nota dettagliata per il relatore."
-        }
-      ]
-    }
-
-    Regole fondamentali:
-    1. Struttura i contenuti in 2 o 3 "cards" per ogni slide.
-    2. Includi l'oggetto "chart" (con tipo "bar" o "pie", categorie e valori numerici reali) nelle slide che presentano dati finanziari, costi o ricavi. Nelle altre slide ometti la chiave "chart".
-    3. Restituisci SOLO il JSON puro.
-
-    Dati di sintesi di partenza:
-    ${contentStep1}
-    `;
-
-    const jsonResponseText = await generateWithRetry(promptJson);
-
-    tempFile2 = path.join(tempDir, `docudecky-step2-${Date.now()}.txt`);
-    await fs.writeFile(tempFile2, jsonResponseText, 'utf-8');
+    const jsonResponseText = await generateWithRetry(prompt);
 
     let cleanJsonStr = jsonResponseText.trim();
     if (cleanJsonStr.startsWith('```json')) {
@@ -136,7 +108,7 @@ export async function POST(req: Request) {
     }
 
     // =========================================================================
-    // STEP 3: Rendering Avanzato in pptxgenjs (Design System Premium)
+    // RENDERIZZAZIONE PPTX (Design System Pro)
     // =========================================================================
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_16x9';
@@ -150,8 +122,10 @@ export async function POST(req: Request) {
       for (const slideData of slidesArray) {
         const slide = pptx.addSlide();
 
+        // Sfondo pulito moderno
         slide.background = { color: 'F8FAFC' };
 
+        // Header
         slide.addText(slideData.title || 'Slide Professionale', {
           x: 0.8,
           y: 0.5,
@@ -282,12 +256,6 @@ export async function POST(req: Request) {
 
     const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
 
-    for (const filePath of [tempFile1, tempFile2]) {
-      if (filePath) {
-        try { await fs.unlink(filePath); } catch (e) {}
-      }
-    }
-
     return new NextResponse(pptxBuffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
@@ -296,24 +264,18 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    for (const filePath of [tempFile1, tempFile2]) {
-      if (filePath) {
-        try { await fs.unlink(filePath); } catch (e) {}
-      }
-    }
-
-    console.error('Errore API Workflow Pro:', error);
+    console.error('Errore API Workflow Ottimizzato:', error);
 
     if (error.message === 'QUOTA_EXHAUSTED' || error?.status === 429) {
       return NextResponse.json(
-        { message: 'Hai raggiunto il limite massimo giornaliero di richieste gratuite della chiave API Gemini. Riprova domani o usa una chiave a pagamento.' },
+        { message: 'Hai raggiunto il limite massimo giornaliero di richieste gratuite della chiave API Gemini (20/giorno). Riprova domani o usa una chiave a pagamento.' },
         { status: 429 }
       );
     }
 
     return NextResponse.json(
-      { message: error.message || 'I server di Google sono temporaneamente sovraccarichi. Riprova tra qualche istante.' },
-      { status: 503 }
+      { message: error.message || 'Errore interno durante la generazione della presentazione.' },
+      { status: 500 }
     );
   }
 }
