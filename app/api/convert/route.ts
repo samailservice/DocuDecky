@@ -96,17 +96,19 @@ export async function POST(req: Request) {
     const contentStep2 = await fs.readFile(tempFile2, 'utf-8');
 
     // =========================================================================
-    // STEP 3: Raffinamento layout, grafici e commenti
+    // STEP 3: Raffinamento con vincolo tassativo per layout, grafici e commenti
     // =========================================================================
     const prompt3 = `
-    Modifica la presentazione utilizzando un layout comune a tutte le slide ed inserendo grafici e commenti inerenti al contenuto di ogni slide. Produci in output una presentazione compatibile con google slide.
-    
-    Per ogni slide, segui questa struttura esatta:
+    Sei un esperto di data visualization e corporate storytelling. 
+    Modifica la presentazione applicando un layout comune e professionale a tutte le slide. 
+    È TASSATIVO E OBBLIGATORIO inserire i tag per i grafici [CHART: ...] in almeno 2 o 3 slide che trattano dati finanziari, ricavi, costi o ripartizioni percentuali, usando dati numerici reali presenti nel testo.
+
+    Per ogni slide, segui rigorosamente questa struttura esatta:
     === SLIDE N: [Titolo della Slide] ===
     - [Punto elenco 1]
     - [Punto elenco 2]
-    [CHART: tipo | Titolo Grafico | Cat1,Cat2,Cat3 | Val1,Val2,Val3] (Includi un grafico laddove ci siano dati numerici o metriche idonee, usando tipi come 'bar' o 'pie'. Se non idoneo, ometti questa riga).
-    [COMMENTO: Nota dettagliata per il relatore o commento esplicito sulla slide].
+    [CHART: bar | Titolo del Grafico | Categoria1,Categoria2,Categoria3 | 100,200,300] (Usa 'bar' o 'pie' come tipo. Includi questa riga se la slide contiene dati numerici idonei).
+    [COMMENTO: Nota dettagliata o script per il relatore].
 
     Struttura di partenza da ottimizzare:
     ${contentStep2}
@@ -119,7 +121,7 @@ export async function POST(req: Request) {
     const finalContent = await fs.readFile(tempFile3, 'utf-8');
 
     // =========================================================================
-    // STEP 4: Generazione del file PowerPoint (.pptx)
+    // STEP 4: Generazione del file PowerPoint (.pptx) con parsing dei grafici
     // =========================================================================
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_16x9';
@@ -142,10 +144,11 @@ export async function POST(req: Request) {
           if (line.startsWith('[CHART:')) {
             const match = line.match(/\[CHART:\s*([^\vert{}]+)\Vert{}\s*([^\vert{}]+)\Vert{}\s*([^\vert{}]+)\Vert{}\s*([^\]]+)\]/i);
             if (match) {
-              const chartType = match[1].trim().toLowerCase() === 'pie' ? pptx.ChartType.pie : pptx.ChartType.bar;
+              const chartTypeInput = match[1].trim().toLowerCase();
+              const chartType = chartTypeInput.includes('pie') ? pptx.ChartType.pie : pptx.ChartType.bar;
               const chartTitle = match[2].trim();
               const categories = match[3].split(',').map((c) => c.trim());
-              const values = match[4].split(',').map((v) => parseFloat(v.trim()) || 0);
+              const values = match[4].split(',').map((v) => parseFloat(v.trim().replace('€', '').replace('M', '')) || 0);
 
               chartConfig = {
                 type: chartType,
@@ -172,6 +175,7 @@ export async function POST(req: Request) {
 
         const slide = pptx.addSlide();
 
+        // Layout comune del titolo
         slide.addText(headerLine, {
           x: 0.8,
           y: 0.6,
@@ -182,13 +186,13 @@ export async function POST(req: Request) {
           color: '4A154B',
         });
 
+        // Se l'IA ha generato il grafico, dividiamo la slide: testo a sinistra, grafico a destra
         if (chartConfig && bulletPoints.length > 0) {
           const formattedBullets = bulletPoints.map((bp) => ({
             text: bp,
             options: { bullet: true, fontSize: 13, color: '333333', spaceAfter: 8 },
           }));
 
-          // Corretto a valori numerici per rispettare il tipo Coord di pptxgenjs
           slide.addText(formattedBullets, {
             x: 0.8,
             y: 1.6,
@@ -204,6 +208,7 @@ export async function POST(req: Request) {
             ...chartConfig.options,
           });
         } else {
+          // Altrimenti visualizziamo i punti elenco a tutta larghezza
           if (bulletPoints.length > 0) {
             const formattedBullets = bulletPoints.map((bp) => ({
               text: bp,
@@ -219,6 +224,7 @@ export async function POST(req: Request) {
           }
         }
 
+        // Inserimento note/commenti del relatore
         if (slideComment) {
           slide.addNotes(slideComment);
         }
