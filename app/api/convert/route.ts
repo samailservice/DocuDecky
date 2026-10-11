@@ -7,7 +7,8 @@ import os from 'os';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-async function generateWithRetry(contents: any, maxRetries = 3) {
+// Funzione di retry potenziata con 5 tentativi e attesa incrementale per gestire i 503
+async function generateWithRetry(contents: any, maxRetries = 5) {
   const model = 'gemini-3.8-flash';
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -25,7 +26,8 @@ async function generateWithRetry(contents: any, maxRetries = 3) {
       }
 
       if (attempt === maxRetries) throw error;
-      await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
+      // Attesa progressiva più lunga (es. 3.5s, 7s, 10.5s, 14s) per smaltire il picco 503
+      await new Promise((resolve) => setTimeout(resolve, attempt * 3500));
     }
   }
   throw new Error('Superato il limite massimo di tentativi con Gemini.');
@@ -148,10 +150,8 @@ export async function POST(req: Request) {
       for (const slideData of slidesArray) {
         const slide = pptx.addSlide();
 
-        // Sfondo pulito color avorio/grigio chiaro per risaltare le card
         slide.background = { color: 'F8FAFC' };
 
-        // 1. Header Istituzionale Elegante
         slide.addText(slideData.title || 'Slide Professionale', {
           x: 0.8,
           y: 0.5,
@@ -159,7 +159,7 @@ export async function POST(req: Request) {
           h: 0.5,
           fontSize: 22,
           bold: true,
-          color: '0F172A', // Slate scuro moderno
+          color: '0F172A',
         });
 
         if (slideData.subtitle) {
@@ -169,7 +169,7 @@ export async function POST(req: Request) {
             w: '85%',
             h: 0.4,
             fontSize: 13,
-            color: '475569', // Slate medio
+            color: '475569',
             italic: true,
           });
         }
@@ -177,12 +177,9 @@ export async function POST(req: Request) {
         const cards: any[] = slideData.cards || [];
         const hasChart = slideData.chart && slideData.chart.categories && slideData.chart.values;
 
-        // 2. Layout a Card con Bordo, Sfondo Bianco e Accent Bar Laterale
         if (hasChart) {
-          // Layout misto: Card a sinistra, Grafico nativo raffinato a destra
           let cardY = 1.5;
           for (const card of cards.slice(0, 3)) {
-            // Sfondo bianco della card
             slide.addShape(pptx.ShapeType.roundRect, {
               x: 0.8,
               y: cardY,
@@ -192,16 +189,14 @@ export async function POST(req: Request) {
               line: { color: 'E2E8F0', width: 1 },
             });
 
-            // Barra d'accento verticale sul bordo sinistro della card
             slide.addShape(pptx.ShapeType.rect, {
               x: 0.8,
               y: cardY,
               w: 0.12,
               h: 1.2,
-              fill: { color: '4F46E5' }, // Indigo professionale
+              fill: { color: '4F46E5' },
             });
 
-            // Contenuto testuale della card
             slide.addText([
               { text: (card.title || '') + '\n', options: { bold: true, fontSize: 12, color: '1E293B' } },
               { text: card.content || '', options: { fontSize: 10, color: '475569', lineSpacing: 12 } }
@@ -215,7 +210,6 @@ export async function POST(req: Request) {
             cardY += 1.35;
           }
 
-          // Grafico a destra stilizzato
           const chartType = String(slideData.chart.type).toLowerCase() === 'pie' ? pptx.ChartType.pie : pptx.ChartType.bar;
           const chartValues = slideData.chart.values.map((v: any) => parseFloat(v) || 0);
 
@@ -241,7 +235,6 @@ export async function POST(req: Request) {
           );
 
         } else {
-          // Layout a griglia simmetrica pulita per le slide solo testo/card
           let startX = 0.8;
           let startY = 1.5;
           
@@ -252,7 +245,6 @@ export async function POST(req: Request) {
             const posX = startX + col * 5.8;
             const posY = startY + row * 1.85;
 
-            // Sfondo card
             slide.addShape(pptx.ShapeType.roundRect, {
               x: posX,
               y: posY,
@@ -262,7 +254,6 @@ export async function POST(req: Request) {
               line: { color: 'E2E8F0', width: 1 },
             });
 
-            // Accent bar sinistra
             slide.addShape(pptx.ShapeType.rect, {
               x: posX,
               y: posY,
@@ -283,7 +274,6 @@ export async function POST(req: Request) {
           });
         }
 
-        // 3. Inserimento Note per il Relatore
         if (slideData.comment) {
           slide.addNotes(slideData.comment);
         }
@@ -322,8 +312,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { message: error.message || 'Errore interno durante la generazione della presentazione.' },
-      { status: 500 }
+      { message: error.message || 'I server di Google sono temporaneamente sovraccarichi. Riprova tra qualche istante.' },
+      { status: 503 }
     );
   }
 }
