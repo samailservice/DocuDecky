@@ -7,7 +7,7 @@ import os from 'os';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Funzione di retry con gestione dedicata dell'errore di quota (429)
+// Funzione di retry avanzata con gestione quota (429) e sovraccarico (503)
 async function generateWithRetry(contents: any, maxRetries = 3) {
   const model = 'gemini-3.8-flash';
 
@@ -19,9 +19,8 @@ async function generateWithRetry(contents: any, maxRetries = 3) {
       });
       return response.text || '';
     } catch (error: any) {
-      console.warn(`Modello \({model} - Tentativo\){attempt}/${maxRetries} fallito:`, error.message);
+      console.warn(`Modello ${model} - Tentativo ${attempt}/${maxRetries} fallito:`, error.message);
       
-      // Se la quota giornaliera gratuita è esaurita (429), interrompi subito i retry e segnalalo
       if (error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED') || error?.message?.includes('quota')) {
         throw new Error('QUOTA_EXHAUSTED');
       }
@@ -34,7 +33,9 @@ async function generateWithRetry(contents: any, maxRetries = 3) {
 }
 
 export async function POST(req: Request) {
-  let tempFilePath: string | null = null;
+  let tempFile1: string | null = null;
+  let tempFile2: string | null = null;
+  let tempFile3: string | null = null;
 
   try {
     const formData = await req.formData();
@@ -49,9 +50,10 @@ export async function POST(req: Request) {
 
     const fileBuffer = await file.arrayBuffer();
     const fileBytes = Buffer.from(fileBuffer);
+    const tempDir = os.tmpdir();
 
     // =========================================================================
-    // STEP 1: Prima query - Sottopone il file e genera il prompt di sintesi
+    // STEP 1: Prima query - Estrazione dati e sintesi dal documento
     // =========================================================================
     const prompt1 = [
       {
@@ -60,64 +62,119 @@ export async function POST(req: Request) {
           data: fileBytes.toString('base64'),
         },
       },
-      `Sei un analista di sistemi e prompt engineer esperto. Analizza il documento allegato e scrivi un prompt funzionale, dettagliato e strutturato (inclusi dati finanziari, metriche e punti chiave) ottimizzato per guidare la generazione di una presentazione di sintesi professionale.
-      
-      Contesto utente:
+      `Sei un analista aziendale esperto. Analizza il documento allegato estraendo tutti i dati chiave, metriche, bilanci e strategie.
+      Contesto:
       - Obiettivo: ${objective}
       - Settore: ${sector}
       - Note: ${userAnswers || 'Nessuna'}
-
-      Restituisci esclusivamente il testo del prompt e dei dati strutturati, senza preamboli o saluti.`
+      Restituisci esclusivamente la sintesi analitica dettagliata, senza preamboli.`
     ];
 
-    const generatedPromptText = await generateWithRetry(prompt1);
+    const rawAnalysisText = await generateWithRetry(prompt1);
+
+    tempFile1 = path.join(tempDir, `docudecky-step1-${Date.now()}.txt`);
+    await fs.writeFile(tempFile1, rawAnalysisText, 'utf-8');
+    const contentStep1 = await fs.readFile(tempFile1, 'utf-8');
 
     // =========================================================================
-    // STEP 2: Salvataggio dell'output in file temporaneo
-    // =========================================================================
-    const tempDir = os.tmpdir();
-    tempFilePath = path.join(tempDir, `docudecky-prompt-${Date.now()}.txt`);
-    await fs.writeFile(tempFilePath, generatedPromptText, 'utf-8');
-
-    const fileContentForQuery2 = await fs.readFile(tempFilePath, 'utf-8');
-
-    // =========================================================================
-    // STEP 3: Seconda query - Crea la presentazione basata sul file temporaneo
+    // STEP 2: Seconda query - Creazione della struttura iniziale delle slide
     // =========================================================================
     const prompt2 = `
-    Agisci come un esperto di corporate storytelling. Utilizzando rigorosamente il testo e le istruzioni presenti nel file di riferimento qui sotto, genera la struttura finale della presentazione suddivisa in esattamente 6-7 sezioni/slide.
-    
-    Usa tassativamente questo formato esatto per ogni slide:
+    Basandoti esclusivamente sui dati di sintesi contenuti nel testo sottostante, suddividi i contenuti in esattamente 6-7 sezioni/slide.
+    Usa rigorosamente questo formato per ogni slide:
     === SLIDE N: [Titolo della Slide] ===
-    - [Punto elenco 1 con dettagli e metriche]
+    - [Punto elenco 1 con dettagli]
     - [Punto elenco 2]
-    - [Punto elenco 3]
 
-    Testo di riferimento (dal file temporaneo):
-    ${fileContentForQuery2}
+    Dati di sintesi:
+    ${contentStep1}
     `;
 
-    const finalSlidesText = await generateWithRetry(prompt2);
+    const rawStructureText = await generateWithRetry(prompt2);
+
+    tempFile2 = path.join(tempDir, `docudecky-step2-${Date.now()}.txt`);
+    await fs.writeFile(tempFile2, rawStructureText, 'utf-8');
+    const contentStep2 = await fs.readFile(tempFile2, 'utf-8');
 
     // =========================================================================
-    // STEP 4: Generazione file PowerPoint (.pptx)
+    // STEP 3: Terza query - Raffinamento layout, grafici e commenti
+    // =========================================================================
+    const prompt3 = `
+    Modifica la presentazione utilizzando un layout comune a tutte le slide ed inserendo grafici e commenti inerenti al contenuto di ogni slide. Produci in output una presentazione compatibile con google slide.
+    
+    Per ogni slide, segui questa struttura esatta:
+    === SLIDE N: [Titolo della Slide] ===
+    - [Punto elenco 1]
+    - [Punto elenco 2]
+    [CHART: tipo | Titolo Grafico | Cat1,Cat2,Cat3 | Val1,Val2,Val3] (Includi un grafico laddove ci siano dati numerici o metriche idonee, usando tipi come 'bar' o 'pie'. Se non idoneo, ometti questa riga).
+    [COMMENTO: Nota dettagliata per il relatore o commento esplicito sulla slide].
+
+    Struttura di partenza da ottimizzare:
+    ${contentStep2}
+    `;
+
+    const finalOptimizedText = await generateWithRetry(prompt3);
+
+    tempFile3 = path.join(tempDir, `docudecky-step3-${Date.now()}.txt`);
+    await fs.writeFile(tempFile3, finalOptimizedText, 'utf-8');
+    const finalContent = await fs.readFile(tempFile3, 'utf-8');
+
+    // =========================================================================
+    // STEP 4: Generazione del file PowerPoint (.pptx) con pptxgenjs
     // =========================================================================
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_16x9';
 
-    const slideChunks = finalSlidesText.split('=== SLIDE').filter(Boolean);
+    const slideChunks = finalContent.split('=== SLIDE').filter(Boolean);
 
     if (slideChunks.length === 0) {
       const slide = pptx.addSlide();
-      slide.addText(finalSlidesText, { x: 0.8, y: 0.8, w: '85%', h: '80%', fontSize: 14, color: '333333' });
+      slide.addText(finalContent, { x: 0.8, y: 0.8, w: '85%', h: '80%', fontSize: 14, color: '333333' });
     } else {
       for (const chunk of slideChunks) {
         const lines = chunk.split('\n').map((l) => l.trim()).filter(Boolean);
         const headerLine = lines[0].replace(/^[:=]+/, '').trim();
-        const bulletPoints = lines.slice(1).map((l) => l.replace(/^[-*]\s*/, ''));
+        
+        const bulletPoints: string[] = [];
+        let chartConfig: any = null;
+        let slideComment = '';
+
+        for (const line of lines.slice(1)) {
+          if (line.startsWith('[CHART:')) {
+            // Estrazione configurazione grafico es. [CHART: bar | Vendite | Q1,Q2 | 100,200]
+            const match = line.match(/\[CHART:\s*([^\vert{}]+)\Vert{}\s*([^\vert{}]+)\Vert{}\s*([^\vert{}]+)\Vert{}\s*([^\]]+)\]/i);
+            if (match) {
+              const chartType = match[1].trim().toLowerCase() === 'pie' ? pptx.ChartType.pie : pptx.ChartType.bar;
+              const chartTitle = match[2].trim();
+              const categories = match[3].split(',').map((c) => c.trim());
+              const values = match[4].split(',').map((v) => parseFloat(v.trim()) || 0);
+
+              chartConfig = {
+                type: chartType,
+                data: [
+                  {
+                    name: chartTitle,
+                    labels: categories,
+                    values: values,
+                  },
+                ],
+                options: {
+                  title: chartTitle,
+                  showLegend: true,
+                  legendPos: 'b',
+                },
+              };
+            }
+          } else if (line.startsWith('[COMMENTO:')) {
+            slideComment = line.replace('[COMMENTO:', '').replace(']', '').trim();
+          } else if (line.startsWith('-') || line.startsWith('*')) {
+            bulletPoints.add ? bulletPoints.push(line.replace(/^[-*]\s*/, '')) : null;
+          }
+        }
 
         const slide = pptx.addSlide();
 
+        // Layout comune coordinato (Titolo unificato in alto)
         slide.addText(headerLine, {
           x: 0.8,
           y: 0.6,
@@ -128,18 +185,47 @@ export async function POST(req: Request) {
           color: '4A154B',
         });
 
-        if (bulletPoints.length > 0) {
+        // Se è presente un grafico, posizioniamo il testo a sinistra e il grafico a destra
+        if (chartConfig && bulletPoints.length > 0) {
           const formattedBullets = bulletPoints.map((bp) => ({
             text: bp,
-            options: { bullet: true, fontSize: 14, color: '333333', spaceAfter: 10 },
+            options: { bullet: true, fontSize: 13, color: '333333', spaceAfter: 8 },
           }));
 
           slide.addText(formattedBullets, {
             x: 0.8,
             y: 1.6,
-            w: '85%',
+            w: '5.0',
             h: '70%',
           });
+
+          slide.addChart(chartConfig.type, chartConfig.data, {
+            x: 6.2,
+            y: 1.6,
+            w: '6.0',
+            h: '4.5',
+            ...chartConfig.options,
+          });
+        } else {
+          // Solo punti elenco a tutta larghezza
+          if (bulletPoints.length > 0) {
+            const formattedBullets = bulletPoints.map((bp) => ({
+              text: bp,
+              options: { bullet: true, fontSize: 14, color: '333333', spaceAfter: 10 },
+            }));
+
+            slide.addText(formattedBullets, {
+              x: 0.8,
+              y: 1.6,
+              w: '85%',
+              h: '70%',
+            });
+          }
+        }
+
+        // Aggiunta commenti/note del relatore alla slide
+        if (slideComment) {
+          slide.addNotes(slideComment);
         }
       }
     }
@@ -147,13 +233,12 @@ export async function POST(req: Request) {
     const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
 
     // =========================================================================
-    // STEP 5: Cancellazione file temporaneo
+    // STEP 5: Pulizia automatica di tutti i file temporanei
     // =========================================================================
-    if (tempFilePath) {
-      try {
-        await fs.unlink(tempFilePath);
-        tempFilePath = null;
-      } catch (e) {}
+    for (const filePath of [tempFile1, tempFile2, tempFile3]) {
+      if (filePath) {
+        try { await fs.unlink(filePath); } catch (e) {}
+      }
     }
 
     return new NextResponse(pptxBuffer as unknown as BodyInit, {
@@ -164,24 +249,24 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    if (tempFilePath) {
-      try {
-        await fs.unlink(tempFilePath);
-      } catch (e) {}
+    // Pulizia di sicurezza in caso di errore
+    for (const filePath of [tempFile1, tempFile2, tempFile3]) {
+      if (filePath) {
+        try { await fs.unlink(filePath); } catch (e) {}
+      }
     }
 
-    console.error('Errore API Workflow Due Step:', error);
+    console.error('Errore API Workflow Tre Step:', error);
 
-    // Gestione specifica per quota esaurita
     if (error.message === 'QUOTA_EXHAUSTED' || error?.status === 429) {
       return NextResponse.json(
-        { message: 'Hai raggiunto il limite massimo giornaliero di richieste gratuite della chiave API Gemini (20 richieste/giorno). Riprova domani o inserisci una chiave con un piano a pagamento.' },
+        { message: 'Hai raggiunto il limite massimo giornaliero di richieste gratuite della chiave API Gemini (20 req/giorno). Riprova domani o usa una chiave a pagamento.' },
         { status: 429 }
       );
     }
 
     return NextResponse.json(
-      { message: error.message || 'Errore interno durante il flusso di elaborazione a due step.' },
+      { message: error.message || 'Errore interno durante il flusso a tre step.' },
       { status: 500 }
     );
   }
