@@ -96,21 +96,19 @@ export async function POST(req: Request) {
     const contentStep2 = await fs.readFile(tempFile2, 'utf-8');
 
     // =========================================================================
-    // STEP 3: Raffinamento con vincolo tassativo per layout, grafici e commenti
+    // STEP 3: Applicazione del prompt richiesto sulla presentazione prodotta
     // =========================================================================
     const prompt3 = `
-    Sei un esperto di data visualization e corporate storytelling. 
-    Modifica la presentazione applicando un layout comune e professionale a tutte le slide. 
-    È TASSATIVO E OBBLIGATORIO inserire i tag per i grafici [CHART: ...] in almeno 2 o 3 slide che trattano dati finanziari, ricavi, costi o ripartizioni percentuali, usando dati numerici reali presenti nel testo.
+    Modifica la presentazione utilizzando un layout comune a tutte le slide ed inserendo grafici e commenti inerenti al contenuto di ogni slide. Produci in output una presentazione compatibile con google slide.
 
-    Per ogni slide, segui rigorosamente questa struttura esatta:
+    Per consentire la corretta interpretazione tecnica e la generazione nativa dei componenti, mantieni o adatta la struttura inserendo i tag dove necessario:
     === SLIDE N: [Titolo della Slide] ===
     - [Punto elenco 1]
     - [Punto elenco 2]
-    [CHART: bar | Titolo del Grafico | Categoria1,Categoria2,Categoria3 | 100,200,300] (Usa 'bar' o 'pie' come tipo. Includi questa riga se la slide contiene dati numerici idonei).
-    [COMMENTO: Nota dettagliata o script per il relatore].
+    [CHART: bar o pie | Titolo del Grafico | Categoria1,Categoria2,Categoria3 | 100,200,300] (Inseriscilo se sono presenti dati numerici idonei)
+    [COMMENTO: Nota dettagliata o script per il relatore]
 
-    Struttura di partenza da ottimizzare:
+    Presentazione prodotta da modificare:
     ${contentStep2}
     `;
 
@@ -186,7 +184,7 @@ export async function POST(req: Request) {
           color: '4A154B',
         });
 
-        // Se l'IA ha generato il grafico, dividiamo la slide: testo a sinistra, grafico a destra
+        // Se sono presenti grafici, dividiamo lo spazio tra testo e grafico
         if (chartConfig && bulletPoints.length > 0) {
           const formattedBullets = bulletPoints.map((bp) => ({
             text: bp,
@@ -208,7 +206,6 @@ export async function POST(req: Request) {
             ...chartConfig.options,
           });
         } else {
-          // Altrimenti visualizziamo i punti elenco a tutta larghezza
           if (bulletPoints.length > 0) {
             const formattedBullets = bulletPoints.map((bp) => ({
               text: bp,
