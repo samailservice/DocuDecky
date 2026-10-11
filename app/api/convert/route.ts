@@ -60,7 +60,7 @@ export async function POST(req: Request) {
           data: fileBytes.toString('base64'),
         },
       },
-      `Sei un analista aziendale esperto. Analizza il documento allegato estraendo tutti i dati chiave, metriche, bilanci e strategie (es. ricavi, costi operativi, stato patrimoniale, KPI).
+      `Sei un analista aziendale esperto. Analizza il documento allegato estraendo tutti i dati chiave, metriche, bilanci e strategie.
       Contesto:
       - Obiettivo: ${objective}
       - Settore: ${sector}
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
     const contentStep1 = await fs.readFile(tempFile1, 'utf-8');
 
     // =========================================================================
-    // STEP 2: Generazione JSON Strutturato per Layout Visivo e Grafici
+    // STEP 2: Generazione JSON Strutturato di Livello Professionale
     // =========================================================================
     const promptJson = `
     Sei un esperto di corporate storytelling e data visualization. 
@@ -86,11 +86,11 @@ export async function POST(req: Request) {
       "slides": [
         {
           "title": "Titolo della Slide",
-          "subtitle": "Breve sottotitolo descrittivo",
+          "subtitle": "Sottotitolo chiaro ed esplicativo del concetto chiave",
           "cards": [
             {
-              "title": "Titolo Blocco / Metrica",
-              "content": "Testo esplicativo o dettaglio numerico"
+              "title": "Titolo del Blocco / Metrica",
+              "content": "Testo descrittivo dettagliato o valore numerico"
             }
           ],
           "chart": {
@@ -99,14 +99,14 @@ export async function POST(req: Request) {
             "categories": ["Cat 1", "Cat 2", "Cat 3"],
             "values": [10, 20, 30]
           },
-          "comment": "Nota dettagliata per lo speaker."
+          "comment": "Nota dettagliata per il relatore."
         }
       ]
     }
 
     Regole fondamentali:
-    1. Invece di semplici elenchi, organizza i contenuti in 2 o 3 "cards" (oggetti con title e content) per dare un impatto visivo a blocchi.
-    2. Includi l'oggetto "chart" (con tipo "bar" o "pie", categorie e valori numerici reali estratti dal testo) nelle slide che presentano dati finanziari, ripartizioni di costi o ricavi.
+    1. Struttura i contenuti in 2 o 3 "cards" per ogni slide.
+    2. Includi l'oggetto "chart" (con tipo "bar" o "pie", categorie e valori numerici reali) nelle slide che presentano dati finanziari, costi o ricavi. Nelle altre slide ometti la chiave "chart".
     3. Restituisci SOLO il JSON puro.
 
     Dati di sintesi di partenza:
@@ -134,7 +134,7 @@ export async function POST(req: Request) {
     }
 
     // =========================================================================
-    // STEP 3: Generazione PowerPoint con Card Grafiche e Box Dinamici
+    // STEP 3: Rendering Avanzato in pptxgenjs (Design System Premium)
     // =========================================================================
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_16x9';
@@ -148,25 +148,28 @@ export async function POST(req: Request) {
       for (const slideData of slidesArray) {
         const slide = pptx.addSlide();
 
-        // 1. Header Unificato di Classe Enterprise
+        // Sfondo pulito color avorio/grigio chiaro per risaltare le card
+        slide.background = { color: 'F8FAFC' };
+
+        // 1. Header Istituzionale Elegante
         slide.addText(slideData.title || 'Slide Professionale', {
           x: 0.8,
           y: 0.5,
           w: '85%',
-          h: 0.6,
+          h: 0.5,
           fontSize: 22,
           bold: true,
-          color: '4A154B', // Branding color
+          color: '0F172A', // Slate scuro moderno
         });
 
         if (slideData.subtitle) {
           slide.addText(slideData.subtitle, {
             x: 0.8,
-            y: 1.1,
+            y: 1.0,
             w: '85%',
             h: 0.4,
             fontSize: 13,
-            color: '666666',
+            color: '475569', // Slate medio
             italic: true,
           });
         }
@@ -174,34 +177,45 @@ export async function POST(req: Request) {
         const cards: any[] = slideData.cards || [];
         const hasChart = slideData.chart && slideData.chart.categories && slideData.chart.values;
 
-        // 2. Layout Visivo a Card / Riquadri Colorati + Grafico opzionale
+        // 2. Layout a Card con Bordo, Sfondo Bianco e Accent Bar Laterale
         if (hasChart) {
-          // Se c'è un grafico: mettiamo le card a sinistra e il grafico a destra
-          let cardY = 1.6;
+          // Layout misto: Card a sinistra, Grafico nativo raffinato a destra
+          let cardY = 1.5;
           for (const card of cards.slice(0, 3)) {
-            // Disegna il riquadro di sfondo della card
+            // Sfondo bianco della card
             slide.addShape(pptx.ShapeType.roundRect, {
               x: 0.8,
               y: cardY,
               w: 5.2,
-              h: 1.1,
-              fill: { color: 'F4F1F5' },
-              line: { color: 'E2D9E4', width: 1 },
+              h: 1.2,
+              fill: { color: 'FFFFFF' },
+              line: { color: 'E2E8F0', width: 1 },
             });
-            // Testo interno alla card
+
+            // Barra d'accento verticale sul bordo sinistro della card
+            slide.addShape(pptx.ShapeType.rect, {
+              x: 0.8,
+              y: cardY,
+              w: 0.12,
+              h: 1.2,
+              fill: { color: '4F46E5' }, // Indigo professionale
+            });
+
+            // Contenuto testuale della card
             slide.addText([
-              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 12, color: '4A154B' } },
-              { text: card.content || '', options: { fontSize: 10, color: '333333' } }
+              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 12, color: '1E293B' } },
+              { text: card.content || '', options: { fontSize: 10, color: '475569', lineSpacing: 12 } }
             ], {
-              x: 1.0,
+              x: 1.1,
               y: cardY + 0.1,
-              w: 4.8,
-              h: 0.9,
+              w: 4.7,
+              h: 1.0,
             });
-            cardY += 1.25;
+
+            cardY += 1.35;
           }
 
-          // Inserimento grafico nativo a destra
+          // Grafico a destra stilizzato
           const chartType = String(slideData.chart.type).toLowerCase() === 'pie' ? pptx.ChartType.pie : pptx.ChartType.bar;
           const chartValues = slideData.chart.values.map((v: any) => parseFloat(v) || 0);
 
@@ -209,57 +223,67 @@ export async function POST(req: Request) {
             chartType,
             [
               {
-                name: slideData.chart.title || 'Dati',
+                name: slideData.chart.title || 'Valori',
                 labels: slideData.chart.categories,
                 values: chartValues,
               },
             ],
             {
               x: 6.4,
-              y: 1.6,
+              y: 1.5,
               w: 5.8,
               h: 4.8,
               title: slideData.chart.title || '',
               showLegend: true,
               legendPos: 'b',
+              chartColors: ['4F46E5', '06B6D4', '10B981', 'F59E0B'],
             }
           );
 
         } else {
-          // Se non c'è grafico, distribuiamo le card in una griglia visiva pulita
+          // Layout a griglia simmetrica pulita per le slide solo testo/card
           let startX = 0.8;
-          let startY = 1.6;
+          let startY = 1.5;
           
           cards.forEach((card, index) => {
             const col = index % 2;
             const row = Math.floor(index / 2);
             
             const posX = startX + col * 5.8;
-            const posY = startY + row * 1.8;
+            const posY = startY + row * 1.85;
 
-            // Box Card di sfondo
+            // Sfondo card
             slide.addShape(pptx.ShapeType.roundRect, {
               x: posX,
               y: posY,
               w: 5.5,
-              h: 1.6,
-              fill: { color: 'F9F8FA' },
-              line: { color: 'E2D9E4', width: 1 },
+              h: 1.65,
+              fill: { color: 'FFFFFF' },
+              line: { color: 'E2E8F0', width: 1 },
+            });
+
+            // Accent bar sinistra
+            slide.addShape(pptx.ShapeType.rect, {
+              x: posX,
+              y: posY,
+              w: 0.12,
+              h: 1.65,
+              fill: { color: '4F46E5' },
             });
 
             slide.addText([
-              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 13, color: '4A154B' } },
-              { text: card.content || '', options: { fontSize: 11, color: '333333' } }
+              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 13, color: '1E293B' } },
+              { text: card.content || '', options: { fontSize: 11, color: '475569', lineSpacing: 14 } }
             ], {
-              x: posX + 0.2,
+              x: posX + 0.3,
               y: posY + 0.15,
-              w: 5.1,
-              h: 1.3,
+              w: 5.0,
+              h: 1.35,
             });
           });
         }
 
-        // 3. Aggiunta Note per il Relatore
+        // 3. Inserimento Note per il Relatore
         if (slideData.comment) {
           slide.addNotes(slideData.comment);
         }
@@ -277,7 +301,7 @@ export async function POST(req: Request) {
     return new NextResponse(pptxBuffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'Content-Disposition': 'attachment; filename="presentazione-docudecky-visiva.pptx"',
+        'Content-Disposition': 'attachment; filename="presentazione-docudecky-pro.pptx"',
       },
     });
 
@@ -288,7 +312,7 @@ export async function POST(req: Request) {
       }
     }
 
-    console.error('Errore API Workflow Visivo:', error);
+    console.error('Errore API Workflow Pro:', error);
 
     if (error.message === 'QUOTA_EXHAUSTED' || error?.status === 429) {
       return NextResponse.json(
