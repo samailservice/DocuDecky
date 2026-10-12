@@ -5,7 +5,7 @@ import pptxgen from 'pptxgenjs';
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function generateWithRetry(contents: any, maxRetries = 3) {
-  const model = 'gemini-2.5-flash';
+  const model = 'gemini-3.8-flash'; // Aggiornato al modello attivo
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -84,7 +84,7 @@ Restituisci SOLO il testo o il JSON richiesto.`
     const responseText = await generateWithRetry(promptParts);
     let cleanText = responseText.trim();
 
-    // Pulizia sicura da blocchi markdown senza interruzioni di riga nelle regex
+    // Pulizia sicura da blocchi markdown
     if (cleanText.includes('```json')) {
       cleanText = cleanText.replace(/```json/g, '').replace(/```/g, '').trim();
     } else if (cleanText.includes('```')) {
