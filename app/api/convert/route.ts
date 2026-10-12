@@ -4,10 +4,8 @@ import pptxgen from 'pptxgenjs';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Funzione di retry avanzata con rotazione automatica dei modelli in caso di 503
 async function generateWithRetry(contents: any, maxRetries = 3) {
-  // Elenco di modelli da testare in sequenza per aggirare i picchi di traffico
-  const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro'];
+  const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
 
   for (const model of modelsToTry) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -24,18 +22,16 @@ async function generateWithRetry(contents: any, maxRetries = 3) {
           throw new Error('QUOTA_EXHAUSTED');
         }
 
-        // Se esauriamo i tentativi per questo modello, passiamo al successivo
         if (attempt === maxRetries) {
           break;
         }
 
-        // Attesa progressiva tra i tentativi
-        await new Promise((resolve) => setTimeout(resolve, attempt * 3000));
+        await new Promise((resolve) => setTimeout(resolve, attempt * 2500));
       }
     }
   }
 
-  throw new Error('I server di Google sono temporaneamente sovraccarichi su tutti i modelli disponibili (503). Riprova tra qualche minuto.');
+  throw new Error('I server di Google sono temporaneamente sovraccarichi su tutti i modelli disponibili. Riprova tra qualche istante.');
 }
 
 export async function POST(req: Request) {
@@ -53,9 +49,6 @@ export async function POST(req: Request) {
     const fileBuffer = await file.arrayBuffer();
     const fileBytes = Buffer.from(fileBuffer);
 
-    // =========================================================================
-    // CHIAMATA UNICA OTTIMIZZATA (Consuma 1 sola richiesta API con Fallback)
-    // =========================================================================
     const prompt = [
       {
         inlineData: {
@@ -117,9 +110,6 @@ export async function POST(req: Request) {
       throw new Error('L\'intelligenza artificiale non ha restituito un formato JSON valido. Riprova.');
     }
 
-    // =========================================================================
-    // RENDERIZZAZIONE PPTX (Design System Pro)
-    // =========================================================================
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_16x9';
 
@@ -282,8 +272,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { message: error.message || 'I server di Google sono temporaneamente sovraccarichi su tutti i modelli. Riprova tra qualche istante.' },
-      { status: 503 }
+      { message: error.message || 'Errore interno durante la generazione della presentazione.' },
+      { status: 500 }
     );
   }
 }
