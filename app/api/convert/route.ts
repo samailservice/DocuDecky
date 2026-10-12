@@ -50,7 +50,7 @@ export async function POST(req: Request) {
           data: fileBytes.toString('base64'),
         },
       },
-      `Sei un analista aziendale senior e un esperto di corporate storytelling. Analizza il documento allegato estraendo i dati chiave e genera una presentazione professionale in stile consulenza strategica composta da esattamente 6 o 7 slide.
+      `Sei un analista aziendale senior e un esperto di corporate storytelling. Analizza il documento allegato estraendo i dati chiave e genera una presentazione professionale in stile consulenza strategica (stile McKinsey/BCG) composta da esattamente 6 o 7 slide.
       
       Contesto utente:
       - Obiettivo: ${objective}
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
             "chart": {
               "type": "bar",
               "title": "Titolo del Grafico",
-              "categories": ["Cat 1", "Cat 2", "Cat 3"],
+              "categories": ["Nome Voce 1", "Nome Voce 2", "Nome Voce 3"],
               "values": [10, 20, 30]
             },
             "comment": "Nota dettagliata per il relatore."
@@ -83,8 +83,9 @@ export async function POST(req: Request) {
 
       Regole fondamentali:
       1. Struttura i contenuti di ogni slide in 2 o 3 "cards" (oggetti con title e content).
-      2. Includi l'oggetto "chart" (con tipo "bar" o "pie", categorie e valori numerici reali) nelle slide che presentano dati finanziari, costi o ricavi. Nelle altre slide ometti completamente la chiave "chart".
-      3. Restituisci SOLO il JSON puro.`
+      2. Includi l'oggetto "chart" (con tipo "bar" o "pie", categorie testuali descrittive e valori numerici reali) nelle slide che presentano dati finanziari, costi o ricavi. Nelle altre slide ometti completamente la chiave "chart".
+      3. IMPORTANTE per i grafici: le "categories" DEVONO essere stringhe descrittive (es. ["Materie Prime", "Personale", "Servizi"]), MAI numeri o indici (es. evita ["1", "2", "3"]).
+      4. Restituisci SOLO il JSON puro.`
     ];
 
     const jsonResponseText = await generateWithRetry(prompt);
@@ -117,10 +118,10 @@ export async function POST(req: Request) {
       slidesArray.forEach((slideData: any, idx: number) => {
         const slide = pptx.addSlide();
 
-        // 1. Sfondo pulito standard compatibile
+        // Sfondo pulito ardesia chiarissimo
         slide.background = { color: 'F8FAFC' };
 
-        // 2. Barra superiore corporate
+        // Barra superiore decorativa corporate
         slide.addShape(pptx.ShapeType.rect, {
           x: 0,
           y: 0,
@@ -129,7 +130,7 @@ export async function POST(req: Request) {
           fill: { color: '2563EB' }
         });
 
-        // 3. Titolo principale
+        // Titolo della slide
         slide.addText(slideData.title || 'Slide Professionale', {
           x: 0.8,
           y: 0.45,
@@ -141,7 +142,7 @@ export async function POST(req: Request) {
           fontFace: 'Arial',
         });
 
-        // 4. Sottotitolo
+        // Sottotitolo
         if (slideData.subtitle) {
           slide.addText(slideData.subtitle, {
             x: 0.8,
@@ -155,7 +156,7 @@ export async function POST(req: Request) {
           });
         }
 
-        // 5. Footer con numerazione
+        // Footer
         slide.addText(`DocuDecky Pro  |  Slide ${idx + 1} di ${totalSlides}`, {
           x: 0.8,
           y: 6.9,
@@ -169,7 +170,6 @@ export async function POST(req: Request) {
         const cards: any[] = slideData.cards || [];
         const hasChart = slideData.chart && slideData.chart.categories && slideData.chart.values;
 
-        // 6. Layout con grafico affiancato ottimizzato per Google Slides
         if (hasChart) {
           let cardY = 1.5;
           const maxCardsToShow = Math.min(cards.length, 3);
@@ -180,7 +180,7 @@ export async function POST(req: Request) {
             slide.addShape(pptx.ShapeType.roundRect, {
               x: 0.8,
               y: cardY,
-              w: 5.1,
+              w: 5.0,
               h: 1.5,
               fill: { color: 'FFFFFF' },
               line: { color: 'CBD5E1', width: 1 },
@@ -201,14 +201,13 @@ export async function POST(req: Request) {
             ], {
               x: 1.1,
               y: cardY + 0.12,
-              w: 4.6,
+              w: 4.5,
               h: 1.25,
             });
 
             cardY += 1.68;
           }
 
-          // Correzione mapping categorie/etichette per Google Slides
           const chartType = String(slideData.chart.type).toLowerCase() === 'pie' ? pptx.ChartType.pie : pptx.ChartType.bar;
           const chartValues = slideData.chart.values.map((v: any) => parseFloat(v) || 0);
           const chartCategories = slideData.chart.categories.map((c: any) => String(c));
@@ -223,9 +222,9 @@ export async function POST(req: Request) {
               },
             ],
             {
-              x: 6.2,
+              x: 6.1,
               y: 1.45,
-              w: 6.5,
+              w: 6.6,
               h: 5.0,
               title: slideData.chart.title || '',
               titleColor: '0F172A',
@@ -236,13 +235,12 @@ export async function POST(req: Request) {
               chartColors: ['2563EB', '06B6D4', '10B981', 'F59E0B'],
               valAxisLabelColor: '64748B',
               catAxisLabelColor: '64748B',
-              catAxisLabelFontSize: 10,
-              valAxisLabelFontSize: 10,
+              catAxisLabelFontSize: 9.5,
+              valAxisLabelFontSize: 9.5,
             }
           );
 
         } else {
-          // 7. Layout a griglia standard
           const startX = 0.8;
           const startY = 1.5;
           
