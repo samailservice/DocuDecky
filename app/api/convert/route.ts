@@ -84,11 +84,11 @@ Restituisci SOLO il testo o il JSON richiesto.`
     const responseText = await generateWithRetry(promptParts);
     let cleanText = responseText.trim();
 
-    // Pulizia da blocchi markdown
-    if (cleanText.startsWith('```json')) {
-      cleanText = cleanText.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
-    } else if (cleanText.startsWith('```')) {
-      cleanText = cleanText.replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
+    // Pulizia sicura da blocchi markdown senza interruzioni di riga nelle regex
+    if (cleanText.includes('```json')) {
+      cleanText = cleanText.replace(/```json/g, '').replace(/```/g, '').trim();
+    } else if (cleanText.includes('```')) {
+      cleanText = cleanText.replace(/```/g, '').trim();
     }
 
     // Controllo se l'IA richiede input aggiuntivi
@@ -98,7 +98,7 @@ Restituisci SOLO il testo o il JSON richiesto.`
         return NextResponse.json(parsed);
       }
     } catch (e) {
-      // Procedi con la generazione dell'output finale
+      // Procedi con la generazione dell'output finale se non è JSON
     }
 
     // OUTPUT 1: Report Testuale / Documento (.docx / .txt)
