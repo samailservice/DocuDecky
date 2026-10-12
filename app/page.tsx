@@ -8,13 +8,15 @@ export default function Page() {
   const [answers, setAnswers] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [sector, setSector] = useState('Business / Aziendale');
-  const [objective, setObjective] = useState('Presentazione PPTX');
+  const [objective, setObjective] = useState('presentazione_pptx');
   const [statusText, setStatusText] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
-  const handleConvert = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleConvert = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setStatusText('Elaborazione in corso...');
+    setStatusText('Analisi del documento e contestualizzazione AI in corso...');
+    setSuccessMessage('');
 
     const formData = new FormData();
     if (file) {
@@ -36,9 +38,26 @@ export default function Page() {
       if (contentType && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.needsInput) {
-          setQuestions(data.questions);
+          setQuestions(data.questions || []);
           setLoading(false);
           setStatusText('');
+          return;
+        }
+
+        if (data.success) {
+          setLoading(false);
+          setStatusText('');
+          setSuccessMessage('Elaborazione completata con successo!');
+          if (data.data && objective === 'documento_docx') {
+            const blob = new Blob([data.data], { type: 'text/plain;charset=utf-8' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = data.filename || 'report-strategico.txt';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }
           return;
         }
       }
@@ -51,14 +70,21 @@ export default function Page() {
         return;
       }
 
+      // Ricezione file binario (es. .pptx)
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = res.headers.get('content-disposition')?.split('filename="')[1]?.replace('"', '') || 'output.pptx';
+      const disposition = res.headers.get('content-disposition');
+      let filename = 'presentazione.pptx';
+      if (disposition && disposition.includes('filename="')) {
+        filename = disposition.split('filename="')[1].replace('"', '');
+      }
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
+      setSuccessMessage('File scaricato con successo!');
     } catch (err: any) {
       console.error(err);
       alert('Errore di connessione al server');
@@ -69,93 +95,134 @@ export default function Page() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
-      <div className="max-w-xl w-full bg-white p-8 rounded-xl shadow-md">
-        <h1 className="text-2xl font-bold mb-4 text-gray-800 flex items-center gap-2">
-          ✨ DocuDecky AI
-        </h1>
+    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 selection:bg-sky-500 selection:text-white">
+      <div className="w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-8 md:p-12">
         
-        {questions.length > 0 && (
-          <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg mb-4">
-            <h2 className="font-semibold text-amber-800 mb-2">L'IA richiede chiarimenti:</h2>
-            <ul className="list-disc pl-5 mb-4 text-sm text-amber-700">
-              {questions.map((q, idx) => (
-                <li key={idx}>{q}</li>
-              ))}
-            </ul>
-            <textarea
-              className="w-full p-2 border rounded mb-2 text-sm text-gray-700"
-              rows={3}
-              placeholder="Scrivi qui le tue risposte..."
-              value={answers}
-              onChange={(e) => setAnswers(e.target.value)}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                const form = document.getElementById('convert-form') as HTMLFormElement;
-                if (form) form.requestSubmit();
-              }}
-              className="bg-purple-600 text-white px-4 py-2 rounded text-sm hover:bg-purple-700"
-            >
-              Invia risposte e continua
-            </button>
+        {/* Header */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 text-sky-400 text-xs font-semibold uppercase tracking-wider mb-4 border border-sky-500/20">
+            <i className="fa-solid fa-wand-magic-sparkles"></i> DocuDecky AI Engine
           </div>
-        )}
+          <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">
+            Converti i tuoi Report in <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-indigo-500">Deck Professionali</span>
+          </h1>
+          <p className="text-slate-400 text-base md:text-lg max-w-2xl mx-auto">
+            Carica un documento (PDF, Word, Bilancio) e seleziona l'obiettivo desiderato per ottenere contenuti su misura.
+          </p>
+        </div>
 
-        <form id="convert-form" onSubmit={handleConvert} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-              📁 Carica Documento (PDF, TXT, DOCX)
-            </label>
+        {/* Form principale */}
+        <form onSubmit={handleConvert} className="space-y-6">
+          
+          {/* Upload file */}
+          <div className="border-2 border-dashed border-slate-700 hover:border-sky-500 transition-all rounded-xl p-8 text-center bg-slate-950/50 group cursor-pointer relative">
             <input 
               type="file" 
-              required 
               onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100" 
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
             />
+            <div className="flex flex-col items-center justify-center pointer-events-none">
+              <div className="w-16 h-16 rounded-full bg-sky-500/10 flex items-center justify-center text-sky-400 mb-4 group-hover:scale-110 transition-transform">
+                <i className="fa-solid fa-cloud-arrow-up text-2xl"></i>
+              </div>
+              <p className="text-lg font-semibold text-slate-200 mb-1">
+                {file ? file.name : "Trascina qui il tuo file o clicca per cercarlo"}
+              </p>
+              <p className="text-sm text-slate-400">
+                Supporta PDF, DOCX, TXT (Max 25MB)
+              </p>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Settore</label>
-            <select 
-              value={sector}
-              onChange={(e) => setSector(e.target.value)}
-              className="w-full p-2 border rounded-md text-sm text-gray-800 bg-white"
-            >
-              <option value="Business / Aziendale">Business / Aziendale</option>
-              <option value="Tecnologia">Tecnologia</option>
-              <option value="Sanità">Sanità</option>
-              <option value="Energia">Energia</option>
-            </select>
+          {/* Griglia Selezione Settore e Obiettivo */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-semibold text-slate-300 mb-2">
+                <i className="fa-solid fa-briefcase mr-2 text-sky-400"></i> Settore di Riferimento
+              </label>
+              <select 
+                value={sector} 
+                onChange={(e) => setSector(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-sky-500 transition-colors"
+              >
+                <option value="Business / Aziendale">Business / Aziendale</option>
+                <option value="Finanza & Banking">Finanza & Banking</option>
+                <option value="ESG & Sostenibilità">ESG & Sostenibilità</option>
+                <option value="Real Estate & Immobiliare">Real Estate & Immobiliare</option>
+                <option value="Startup & VC / Tech">Startup & VC / Tech</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-300 mb-2">
+                <i className="fa-solid fa-bullseye mr-2 text-sky-400"></i> Obiettivo di Output
+              </label>
+              <select 
+                value={objective} 
+                onChange={(e) => setObjective(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-sky-500 transition-colors"
+              >
+                <option value="presentazione_pptx">Presentazione PowerPoint (.pptx)</option>
+                <option value="google_slides">Compatibile Google Slides (.pptx)</option>
+                <option value="pitch_presentazione">Pitch Deck Persuasivo</option>
+                <option value="documento_docx">Documento / Report Testuale Strutturato</option>
+              </select>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Obiettivo</label>
-            <input 
-              type="text" 
-              value={objective}
-              onChange={(e) => setObjective(e.target.value)}
-              className="w-full p-2 border rounded-md text-sm text-gray-800" 
-            />
-          </div>
+          {/* Se l'IA richiede input aggiuntivi */}
+          {questions.length > 0 && (
+            <div className="bg-sky-500/10 border border-sky-500/30 rounded-xl p-6 space-y-4">
+              <div className="flex items-center gap-2 text-sky-400 font-semibold">
+                <i className="fa-solid fa-circle-question"></i> L'IA richiede qualche chiarimento prima di procedere:
+              </div>
+              <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
+                {questions.map((q, idx) => (
+                  <li key={idx}>{q}</li>
+                ))}
+              </ul>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Le tue risposte o indicazioni aggiuntive:</label>
+                <textarea 
+                  value={answers}
+                  onChange={(e) => setAnswers(e.target.value)}
+                  placeholder="Es. Il focus principale deve essere sui dati finanziari del Q3..."
+                  rows={3}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:outline-none focus:border-sky-500"
+                />
+              </div>
+            </div>
+          )}
 
-          <button
+          {/* Bottone di Invio / Azione */}
+          <button 
             type="submit"
-            disabled={loading}
-            className="w-full bg-purple-600 text-white py-2 px-4 rounded-md font-medium hover:bg-purple-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+            disabled={loading || !file}
+            className="w-full bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-3 text-lg"
           >
             {loading ? (
               <>
-                <span className="animate-spin">⏳</span>
-                {statusText || 'Analisi IA e generazione in corso...'}
+                <i className="fa-solid fa-spinner fa-spin"></i>
+                <span>{statusText || 'Elaborazione in corso...'}</span>
               </>
             ) : (
-              <>✨ Genera Presentazione</>
+              <>
+                <i className="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Genera Output Richiesto</span>
+              </>
             )}
           </button>
+
+          {successMessage && (
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-center font-medium">
+              <i className="fa-solid fa-circle-check mr-2"></i> {successMessage}
+            </div>
+          )}
+
         </form>
+
       </div>
     </main>
   );
 }
+```eof
