@@ -4,28 +4,38 @@ import pptxgen from 'pptxgenjs';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-async function generateWithRetry(contents: any, maxRetries = 4) {
-  const model = 'gemini-3.8-flash';
+// Funzione di retry avanzata con rotazione automatica dei modelli in caso di 503
+async function generateWithRetry(contents: any, maxRetries = 3) {
+  // Elenco di modelli da testare in sequenza per aggirare i picchi di traffico
+  const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro'];
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const response = await ai.models.generateContent({
-        model: model,
-        contents: contents,
-      });
-      return response.text || '';
-    } catch (error: any) {
-      console.warn(`Modello ${model} - Tentativo ${attempt}/${maxRetries} fallito:`, error.message);
-      
-      if (error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED') || error?.message?.includes('quota')) {
-        throw new Error('QUOTA_EXHAUSTED');
+  for (const model of modelsToTry) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: contents,
+        });
+        return response.text || '';
+      } catch (error: any) {
+        console.warn(`Modello ${model} - Tentativo ${attempt}/${maxRetries} fallito:`, error.message);
+        
+        if (error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED') || error?.message?.includes('quota')) {
+          throw new Error('QUOTA_EXHAUSTED');
+        }
+
+        // Se esauriamo i tentativi per questo modello, passiamo al successivo
+        if (attempt === maxRetries) {
+          break;
+        }
+
+        // Attesa progressiva tra i tentativi
+        await new Promise((resolve) => setTimeout(resolve, attempt * 3000));
       }
-
-      if (attempt === maxRetries) throw error;
-      await new Promise((resolve) => setTimeout(resolve, attempt * 2500));
     }
   }
-  throw new Error('Superato il limite massimo di tentativi con Gemini.');
+
+  throw new Error('I server di Google sono temporaneamente sovraccarichi su tutti i modelli disponibili (503). Riprova tra qualche minuto.');
 }
 
 export async function POST(req: Request) {
@@ -44,7 +54,7 @@ export async function POST(req: Request) {
     const fileBytes = Buffer.from(fileBuffer);
 
     // =========================================================================
-    // CHIAMATA UNICA OTTIMIZZATA (Consuma 1 sola richiesta API)
+    // CHIAMATA UNICA OTTIMIZZATA (Consuma 1 sola richiesta API con Fallback)
     // =========================================================================
     const prompt = [
       {
@@ -122,10 +132,8 @@ export async function POST(req: Request) {
       for (const slideData of slidesArray) {
         const slide = pptx.addSlide();
 
-        // Sfondo pulito moderno
         slide.background = { color: 'F8FAFC' };
 
-        // Header
         slide.addText(slideData.title || 'Slide Professionale', {
           x: 0.8,
           y: 0.5,
@@ -274,8 +282,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { message: error.message || 'Errore interno durante la generazione della presentazione.' },
-      { status: 500 }
+      { message: error.message || 'I server di Google sono temporaneamente sovraccarichi su tutti i modelli. Riprova tra qualche istante.' },
+      { status: 503 }
     );
   }
 }
