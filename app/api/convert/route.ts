@@ -4,34 +4,29 @@ import pptxgen from 'pptxgenjs';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-async function generateWithRetry(contents: any, maxRetries = 3) {
-  const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+async function generateWithRetry(contents: any, maxRetries = 4) {
+  const model = 'gemini-1.5-flash';
 
-  for (const model of modelsToTry) {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model: model,
-          contents: contents,
-        });
-        return response.text || '';
-      } catch (error: any) {
-        console.warn(`Modello ${model} - Tentativo ${attempt}/${maxRetries} fallito:`, error.message);
-        
-        if (error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED') || error?.message?.includes('quota')) {
-          throw new Error('QUOTA_EXHAUSTED');
-        }
-
-        if (attempt === maxRetries) {
-          break;
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, attempt * 2500));
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: model,
+        contents: contents,
+      });
+      return response.text || '';
+    } catch (error: any) {
+      console.warn(`Modello ${model} - Tentativo ${attempt}/${maxRetries} fallito:`, error.message);
+      
+      if (error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED') || error?.message?.includes('quota')) {
+        throw new Error('QUOTA_EXHAUSTED');
       }
+
+      if (attempt === maxRetries) throw error;
+      // Attesa progressiva tra i tentativi per smaltire eventuali picchi temporanei
+      await new Promise((resolve) => setTimeout(resolve, attempt * 3000));
     }
   }
-
-  throw new Error('I server di Google sono temporaneamente sovraccarichi su tutti i modelli disponibili. Riprova tra qualche istante.');
+  throw new Error('Superato il limite massimo di tentativi con Gemini.');
 }
 
 export async function POST(req: Request) {
