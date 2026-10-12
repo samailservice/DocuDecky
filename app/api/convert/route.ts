@@ -49,9 +49,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Nessun file caricato' }, { status: 400 });
     }
 
-    const TEMPLATE_ID = process.env.GOOGLE_DRIVE_TEMPLATE_ID;
-    if (!TEMPLATE_ID) {
+    const rawTemplateEnv = process.env.GOOGLE_DRIVE_TEMPLATE_ID;
+    if (!rawTemplateEnv) {
       return NextResponse.json({ message: 'Manca la variabile d\'ambiente GOOGLE_DRIVE_TEMPLATE_ID' }, { status: 500 });
+    }
+
+    // Estrazione automatica e sicura del riferimento al template anche se viene inserito l'intero URL
+    let TEMPLATE_ID = rawTemplateEnv.trim();
+    const urlMatch = TEMPLATE_ID.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (urlMatch && urlMatch[1]) {
+      TEMPLATE_ID = urlMatch[1];
     }
 
     const fileBuffer = await file.arrayBuffer();
@@ -85,7 +92,7 @@ export async function POST(req: Request) {
         "metric_note_3": "Utile Netto",
         "metric_val_4": "€ 400K",
         "metric_note_4": "Liquidità Cassa",
-        "narrative_1": "Commento direzionale sui risultati d'esercizio 2025...",
+        "narrative_1": "Commento direzionale sui risultati d'esercizio...",
         "segment_a_title": "Guanti Tecnici Industriali",
         "segment_a_val": "60% (€ 1.32M)",
         "segment_b_title": "Guanti in Pelle Lusso",
@@ -128,7 +135,7 @@ export async function POST(req: Request) {
       throw new Error('Impossibile duplicare il template Google Drive.');
     }
 
-    // 3. Esegue la sostituzione automatica dei tag (es. {{title_1}}) con i dati di Gemini
+    // 3. Esegue la sostituzione automatica dei tag (es. {{title_1}}) con i dati elaborati
     const requests = Object.keys(data).map((key) => ({
       replaceAllText: {
         containsText: {
@@ -153,7 +160,6 @@ export async function POST(req: Request) {
       { responseType: 'stream' }
     );
 
-    // Converte lo stream in buffer per il download nel browser
     const chunks: any[] = [];
     for await (const chunk of exportResponse.data) {
       chunks.push(chunk);
