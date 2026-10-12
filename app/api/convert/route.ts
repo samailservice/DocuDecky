@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const sector = (formData.get('sector') as string) || 'Business / Aziendale';
-    const objective = (formData.get('objective') as string) || 'Presentazione PPTX';
+    const objective = (formData.get('objective') as string) || 'Presentazione Bilancio';
     const userAnswers = (formData.get('userAnswers') as string) || '';
 
     if (!file) {
@@ -50,114 +50,97 @@ export async function POST(req: Request) {
           data: fileBytes.toString('base64'),
         },
       },
-      `Sei un analista finanziario senior e un esperto di corporate storytelling. Analizza il documento allegato e genera una presentazione di esattamente 7 slide strutturata rigorosamente secondo il modello standard di bilancio e relazione agli stakeholder (stile McKinsey/BCG):
+      `Sei un analista finanziario senior. Analizza il bilancio allegato e genera una presentazione aziendale strutturata rigorosamente in **esattamente 7 slide** che replicano lo schema e i contenuti del template master ufficiale[cite: 5].
       
       Contesto utente:
       - Obiettivo: ${objective}
       - Settore: ${sector}
       - Note: ${userAnswers || 'Nessuna'}
 
-      Devi restituire **ESCLUSIVAMENTE** un oggetto JSON valido (senza blocchi markdown tipo \`\`\`json) strutturato con esattamente 7 slide in questo ordine preciso:
-      - Slide 1: Copertina istituzionale (Titolo, Sottotitolo, Informazioni Societarie)[cite: 4].
-      - Slide 2: Executive Summary / Highlights con 4 metriche chiave (Fatturato, EBIT, Utile, Cassa) e commento della governance[cite: 4].
-      - Slide 3: Analisi Commerciale & Mix di Prodotto (con oggetto "chart" a torta o barre sui segmenti di ricavo)[cite: 4].
-      - Slide 4: Conto Economico & Struttura Costi Operativi (spaccato materie prime, personale, servizi)[cite: 4].
-      - Slide 5: Assetto Patrimoniale (Confronto Attivo vs Passivo e Patrimonio Netto)[cite: 4].
-      - Slide 6: Indicatori Gestionali e KPI (ROE, ROI, ROS, Debt/Equity)[cite: 4].
-      - Slide 7: Prospettive Future, Destinazione Utile e Piano Capex 2026[cite: 4].
+      Restituisci **ESCLUSIVAMENTE** un oggetto JSON valido (senza blocchi markdown) strutturato così:
 
-      Schema JSON richiesto:
       {
         "slides": [
           {
             "slideNumber": 1,
-            "category": "ASSEMBLEA DEI SOCI & STAKEHOLDER",
-            "title": "Bilancio d'Esercizio 2025",
-            "subtitle": "Risultati Economico-Finanziari e Strategia di Sviluppo",
-            "cards": [
-              { "title": "INFORMAZIONI SOCIETARIE", "content": "Sede Legale: ... \nP.IVA: ... \nCapitale Sociale: ..." }
-            ]
+            "category": "ASSEMBLEA DEI SOCI",
+            "title": "Titolo Principale della Presentazione",
+            "subtitle": "Sottotitolo chiaro",
+            "description": "Descrizione sintetica del contenuto o degli obiettivi strategici.",
+            "company": "Nome Azienda S.r.l.",
+            "infoItems": ["Sede Legale: ...", "P.IVA: ...", "Capitale Sociale: ..."]
           },
           {
             "slideNumber": 2,
-            "category": "SINTESI DIREZIONALE",
-            "title": "Executive Summary & Highlights 2025",
-            "subtitle": "Crescita a doppia cifra e solidità patrimoniale",
-            "cards": [
-              { "title": "FATTURATO TOTALE", "content": "€ 2,2M (+12% vs 2024)" },
-              { "title": "EBIT OPERATIVO", "content": "€ 350K (15,9% ricavi)" },
-              { "title": "UTILE NETTO", "content": "€ 180K (8,2% margine)" },
-              { "title": "CASSA & LIQUIDITÀ", "content": "€ 400K disponibili" }
-            ],
-            "comment": "Commento della Governance: eccellente espansione con redditività in crescita."
+            "section": "SEZIONE 01",
+            "title": "Sintesi e Metriche Chiave",
+            "narrative": "Commento principale della direzione sui risultati d'esercizio.",
+            "metrics": [
+              { "title": "FATTURATO", "value": "€ 2,2M", "note": "+12% vs 2024" },
+              { "title": "EBIT", "value": "€ 350K", "note": "15,9% ricavi" },
+              { "title": "UTILE NETTO", "value": "€ 180K", "note": "8,2% margine" },
+              { "title": "CASSA", "value": "€ 400K", "note": "Liquidità immediata" }
+            ]
           },
           {
             "slideNumber": 3,
-            "category": "MERCATO & VENDITE",
-            "title": "Analisi Commerciale & Mix di Prodotto",
-            "subtitle": "Espansione geografica e posizionamento di nicchia",
-            "cards": [
-              { "title": "Guanti Tecnici Industriali (60%)", "content": "€ 1.320.000 - Automotive e Siderurgico." },
-              { "title": "Guanti in Pelle Lusso (40%)", "content": "€ 880.000 - Manifattura artigianale toscana." }
-            ],
-            "chart": {
-              "type": "pie",
-              "title": "Ripartizione Ricavi per Segmento",
-              "categories": ["Tecnici Industriali", "Pelle Lusso"],
-              "values": [60, 40]
-            }
+            "section": "SEZIONE 02",
+            "title": "Pilastri Strategici & Mercato",
+            "elementA": { "title": "Segmento Industriale", "metric": "60% (€ 1.32M)", "points": ["Punto chiave 1", "Punto chiave 2"] },
+            "elementB": { "title": "Segmento Lusso", "metric": "40% (€ 880K)", "points": ["Punto chiave 1", "Punto chiave 2"] },
+            "note": "Nota di evidenza trasversale o punto di forza."
           },
           {
             "slideNumber": 4,
-            "category": "PERFORMANCE FINANZIARIA",
-            "title": "Conto Economico & Struttura Costi Operativi",
-            "subtitle": "Controllo rigoroso dei costi di produzione e marginalità",
-            "cards": [
-              { "title": "Materie Prime", "content": "€ 900.000 (Pelli, Kevlar, Accessori)" },
-              { "title": "Costo Personale", "content": "€ 600.000 (24 FTE operativi)" },
-              { "title": "Servizi e Ammortamenti", "content": "€ 350.000 (Utenze e Impianti)" }
+            "section": "SEZIONE 03",
+            "title": "Conto Economico & Tabella Strutturata",
+            "highlight": "Riflessione sintetica sulla gestione dei costi e dei margini.",
+            "tableRows": [
+              { "label": "Valore della Produzione", "value": "€ 2.200.000", "isTotal": true },
+              { "label": "Materie Prime", "value": "- € 900.000", "isTotal": false },
+              { "label": "Costo del Personale", "value": "- € 600.000", "isTotal": false },
+              { "label": "Servizi ed Energia", "value": "- € 250.000", "isTotal": false },
+              { "label": "Ammortamenti", "value": "- € 100.000", "isTotal": false },
+              { "label": "Risultato Operativo (EBIT)", "value": "€ 350.000", "isTotal": true },
+              { "label": "Risultato Netto d'Esercizio", "value": "€ 180.000", "isTotal": true }
             ]
           },
           {
             "slideNumber": 5,
-            "category": "ASSETTO PATRIMONIALE",
-            "title": "Stato Patrimoniale: Impieghi vs Fonti",
-            "subtitle": "Equilibrio finanziario e copertura delle immobilizzazioni",
-            "cards": [
-              { "title": "ATTIVO (Impieghi)", "content": "Totale € 1.900.000 (Fisso € 650K, Circolante € 1,25M)" },
-              { "title": "PASSIVO & NETTO (Fonti)", "content": "Patrimonio Netto € 800K, Debiti € 950K, TFR/Fondi € 150K" }
-            ]
+            "section": "SEZIONE 04",
+            "title": "Confronto Bilanciato: Impieghi vs Fonti",
+            "comment": "Commento riassuntivo sull'equilibrio patrimoniale e finanziario.",
+            "sideA": { "title": "ATTIVO (Impieghi)", "total": "€ 1.900.000", "items": ["Attivo Fisso: € 650K", "Attivo Circolante: € 1,25M"] },
+            "sideB": { "title": "PASSIVO & NETTO (Fonti)", "total": "€ 1.900.000", "items": ["Patrimonio Netto: € 800K", "Debiti Totali: € 950K", "TFR/Fondi: € 150K"] }
           },
           {
             "slideNumber": 6,
-            "category": "INDICATORI GESTIONALI",
-            "title": "Analisi dei KPI e Solidità Finanziaria",
-            "subtitle": "Metriche di redditività e indebitamento controllato",
-            "cards": [
-              { "title": "ROE: 22,5%", "content": "Eccellente redditività del capitale proprio." },
-              { "title": "ROI: 18,4%", "content": "Elevata efficienza operativa caratteristica." },
-              { "title": "ROS: 15,9%", "content": "EBIT margin di assoluto rilievo." },
-              { "title": "DEBT / EQUITY: 1,18", "content": "Leva finanziaria equilibrata e sostenibile." }
+            "section": "SEZIONE 05",
+            "title": "Dashboard Indicatori e KPI",
+            "comment": "Valutazione complessiva degli indici prestazionali aziendali.",
+            "kpis": [
+              { "title": "ROE", "value": "22,5%", "desc": "Redditività capitale proprio." },
+              { "title": "ROI", "value": "18,4%", "desc": "Efficienza operativa caratteristica." },
+              { "title": "ROS", "value": "15,9%", "desc": "EBIT margin di settore." },
+              { "title": "DEBT / EQUITY", "value": "1,18", "desc": "Leva finanziaria equilibrata." }
             ]
           },
           {
             "slideNumber": 7,
-            "category": "PROSPETTIVE FUTURE",
-            "title": "Destinazione Utile & Piano Capex 2026",
-            "subtitle": "Autofinanziamento per la robotizzazione e remunerazione soci",
-            "cards": [
-              { "title": "Riserva Legale (5%)", "content": "€ 9.000 (Accantonamento obbligatorio)" },
-              { "title": "Riserva Straordinaria / Capex", "content": "€ 121.000 (Taglio laser robotizzato 2026)" },
-              { "title": "Dividendi ai Soci", "content": "€ 50.000 (Payout 27,8%)" }
+            "section": "SEZIONE 06",
+            "title": "Allocazione Risorse e Piano Strategico",
+            "slogan": "Visione di lungo termine e consolidamento tecnologico 4.0",
+            "initiative": { "title": "Piano Capex 2026: Taglio Laser", "desc": "Investimento in automazione industriale per riduzione sfridi." },
+            "allocations": [
+              { "label": "Riserva Legale", "quota": "€ 9K (5%)" },
+              { "label": "Riserva Straordinaria", "quota": "€ 121K (67,2%)" },
+              { "label": "Dividendi ai Soci", "quota": "€ 50K (27,8%)" }
             ]
           }
         ]
       }
 
-      Regole fondamentali:
-      1. Restituisci esattamente 7 slide con la struttura indicata[cite: 4].
-      2. Includi categorie descrittive in MAIUSCOLETTO (es. "MERCATO & VENDITE").
-      3. Restituisci SOLO il JSON puro.`
+      Restituisci SOLO il JSON puro.`
     ];
 
     const jsonResponseText = await generateWithRetry(prompt);
@@ -183,229 +166,92 @@ export async function POST(req: Request) {
     const slidesArray = presentationData.slides || [];
     const totalSlides = slidesArray.length;
 
-    if (totalSlides === 0) {
+    if (slidesArray.length === 0) {
       const slide = pptx.addSlide();
       slide.addText("Nessun contenuto generato.", { x: 0.8, y: 0.8, w: '85%', h: '80%', fontSize: 14, color: '333333', fontFace: 'Arial' });
     } else {
       slidesArray.forEach((slideData: any, idx: number) => {
         const slide = pptx.addSlide();
-
-        // Sfondo pulito
         slide.background = { color: 'F8FAFC' };
 
-        // Header superiore corporate con categoria e numerazione slide
-        slide.addShape(pptx.ShapeType.rect, {
-          x: 0,
-          y: 0,
-          w: '100%',
-          h: 0.08,
-          fill: { color: '2563EB' }
-        });
+        // Header comune stile template
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: '2563EB' } });
 
-        slide.addText(`${slideData.category || 'RELAZIONE AZIENDALE'}`, {
-          x: 0.8,
-          y: 0.35,
-          w: '80%',
-          h: 0.3,
-          fontSize: 10,
-          bold: true,
-          color: '2563EB',
-          fontFace: 'Arial',
-        });
-
-        slide.addText(`Slide ${idx + 1} di ${totalSlides}`, {
-          x: 10.5,
-          y: 0.35,
-          w: 2.0,
-          h: 0.3,
-          fontSize: 10,
-          bold: true,
-          color: '64748B',
-          align: 'right',
-          fontFace: 'Arial',
-        });
-
-        // Titolo e sottotitolo slide
-        slide.addText(slideData.title || 'Titolo Slide', {
-          x: 0.8,
-          y: 0.65,
-          w: '85%',
-          h: 0.5,
-          fontSize: 20,
-          bold: true,
-          color: '0F172A',
-          fontFace: 'Arial',
-        });
-
-        if (slideData.subtitle) {
-          slide.addText(slideData.subtitle, {
-            x: 0.8,
-            y: 1.15,
-            w: '85%',
-            h: 0.35,
-            fontSize: 12,
-            color: '64748B',
-            italic: true,
-            fontFace: 'Arial',
-          });
+        if (slideData.section) {
+          slide.addText(slideData.section, { x: 0.8, y: 0.35, w: 4.0, h: 0.3, fontSize: 10, bold: true, color: '2563EB', fontFace: 'Arial' });
         }
 
-        // Footer di pagina
-        slide.addText(`GloveCraft S.r.l.  |  Documento Ufficiale per Assemblea dei Soci`, {
-          x: 0.8,
-          y: 6.9,
-          w: '85%',
-          h: 0.3,
-          fontSize: 8.5,
-          color: '94A3B8',
-          fontFace: 'Arial',
-        });
+        slide.addText(`Slide ${idx + 1} di ${totalSlides}`, { x: 10.5, y: 0.35, w: 2.0, h: 0.3, fontSize: 10, bold: true, color: '64748B', align: 'right', fontFace: 'Arial' });
 
-        const cards: any[] = slideData.cards || [];
-        const hasChart = slideData.chart && slideData.chart.categories && slideData.chart.values;
+        slide.addText(slideData.title || 'Titolo Slide', { x: 0.8, y: 0.65, w: '85%', h: '0.5', fontSize: 20, bold: true, color: '0F172A', fontFace: 'Arial' });
 
-        if (hasChart) {
-          // Layout con grafico a destra e card a sinistra
-          let cardY = 1.6;
-          cards.slice(0, 3).forEach((card, i) => {
-            slide.addShape(pptx.ShapeType.roundRect, {
-              x: 0.8,
-              y: cardY,
-              w: 5.2,
-              h: 1.5,
-              fill: { color: 'FFFFFF' },
-              line: { color: 'CBD5E1', width: 1 },
-              rectRadius: 0.06
-            });
+        // Rendering specifico per ciascun layout del template
+        if (idx === 0) {
+          // SLIDE 1: Copertina
+          if (slideData.category) {
+            slide.addText(slideData.category, { x: 0.8, y: 1.3, w: '85%', h: 0.3, fontSize: 11, bold: true, color: '2563EB', fontFace: 'Arial' });
+          }
+          if (slideData.subtitle) {
+            slide.addText(slideData.subtitle, { x: 0.8, y: 1.7, w: '85%', h: 0.4, fontSize: 14, bold: true, color: '334155', fontFace: 'Arial' });
+          }
+          if (slideData.description) {
+            slide.addShape(pptx.ShapeType.roundRect, { x: 0.8, y: 2.3, w: 8.0, h: 1.5, fill: { color: 'FFFFFF' }, line: { color: 'CBD5E1', width: 1 }, rectRadius: 0.06 });
+            slide.addText(slideData.description, { x: 1.1, y: 2.5, w: 7.4, h: 1.1, fontSize: 12, color: '475569', lineSpacing: 16, fontFace: 'Arial' });
+          }
+          // Info societarie in basso
+          slide.addShape(pptx.ShapeType.roundRect, { x: 0.8, y: 4.2, w: 8.0, h: 1.8, fill: { color: 'FFFFFF' }, line: { color: 'CBD5E1', width: 1 }, rectRadius: 0.06 });
+          const infoText = (slideData.infoItems || []).join('\n');
+          slide.addText([
+            { text: "INFORMAZIONI SOCIETARIE\n", options: { bold: true, fontSize: 11, color: '0F172A' } },
+            { text: infoText, options: { fontSize: 10.5, color: '334155', lineSpacing: 14 } }
+          ], { x: 1.1, y: 4.4, w: 7.4, h: 1.4, fontFace: 'Arial' });
 
-            slide.addShape(pptx.ShapeType.rect, {
-              x: 0.8,
-              y: cardY,
-              w: 0.1,
-              h: 1.5,
-              fill: { color: i % 2 === 0 ? '2563EB' : '4F46E5' },
-            });
+          if (slideData.company) {
+            slide.addText(slideData.company, { x: 0.8, y: 6.8, w: '85%', h: 0.3, fontSize: 10, bold: true, color: '64748B', fontFace: 'Arial' });
+          }
 
+        } else if (idx === 1) {
+          // SLIDE 2: Sintesi e Metriche Chiave (Sezione 01)[cite: 5]
+          if (slideData.narrative) {
+            slide.addShape(pptx.ShapeType.roundRect, { x: 0.8, y: 1.3, w: 11.7, h: 1.0, fill: { color: 'FFFFFF' }, line: { color: 'CBD5E1', width: 1 }, rectRadius: 0.06 });
             slide.addText([
-              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 11, color: '0F172A', fontFace: 'Arial' } },
-              { text: card.content || '', options: { fontSize: 10, color: '334155', lineSpacing: 13, fontFace: 'Arial' } }
-            ], {
-              x: 1.1,
-              y: cardY + 0.12,
-              w: 4.7,
-              h: 1.25,
-            });
+              { text: "NARRATIVA / COMMENTO PRINCIPALE\n", options: { bold: true, fontSize: 10, color: '2563EB' } },
+              { text: slideData.narrative, options: { fontSize: 11, color: '334155' } }
+            ], { x: 1.1, y: 1.45, w: 11.1, h: 0.7, fontFace: 'Arial' });
+          }
 
-            cardY += 1.68;
+          const metrics = slideData.metrics || [];
+          metrics.slice(0, 4).forEach((m: any, mIdx: number) => {
+            const posX = 0.8 + mIdx * 3.0;
+            slide.addShape(pptx.ShapeType.roundRect, { x: posX, y: 2.6, w: 2.7, h: 3.8, fill: { color: 'FFFFFF' }, line: { color: 'CBD5E1', width: 1 }, rectRadius: 0.06 });
+            slide.addShape(pptx.ShapeType.rect, { x: posX, y: 2.6, w: 2.7, h: 0.45, fill: { color: '2563EB' } });
+            slide.addText(m.title || '', { x: posX + 0.1, y: 2.68, w: 2.5, h: 0.3, fontSize: 10, bold: true, color: 'FFFFFF', align: 'center', fontFace: 'Arial' });
+            slide.addText(m.value || '', { x: posX + 0.1, y: 3.5, w: 2.5, h: 0.8, fontSize: 18, bold: true, color: '0F172A', align: 'center', fontFace: 'Arial' });
+            slide.addText(m.note || '', { x: posX + 0.1, y: 4.8, w: 2.5, h: 1.2, fontSize: 10.5, color: '64748B', align: 'center', lineSpacing: 14, fontFace: 'Arial' });
           });
 
-          const chartType = String(slideData.chart.type).toLowerCase() === 'pie' ? pptx.ChartType.pie : pptx.ChartType.bar;
-          const chartValues = slideData.chart.values.map((v: any) => parseFloat(v) || 0);
-          const chartCategories = slideData.chart.categories.map((c: any) => String(c));
+        } else if (idx === 2) {
+          // SLIDE 3: Pilastri Strategici (Sezione 02)[cite: 5]
+          const elA = slideData.elementA || {};
+          const elB = slideData.elementB || {};
 
-          slide.addChart(
-            chartType,
-            [
-              {
-                name: slideData.chart.title || 'Valori',
-                labels: chartCategories,
-                values: chartValues,
-              },
-            ],
-            {
-              x: 6.3,
-              y: 1.6,
-              w: 6.3,
-              h: 4.8,
-              title: slideData.chart.title || '',
-              titleColor: '0F172A',
-              titleFontSize: 12,
-              titleFontFace: 'Arial',
-              showLegend: true,
-              legendPos: 'b',
-              chartColors: ['2563EB', '06B6D4', '10B981', 'F59E0B'],
-              valAxisLabelColor: '64748B',
-              catAxisLabelColor: '64748B',
-            }
-          );
+          // Box A
+          slide.addShape(pptx.ShapeType.roundRect, { x: 0.8, y: 1.3, w: 5.7, h: 4.2, fill: { color: 'FFFFFF' }, line: { color: 'CBD5E1', width: 1 }, rectRadius: 0.06 });
+          slide.addShape(pptx.ShapeType.rect, { x: 0.8, y: 1.3, w: 0.12, h: 4.2, fill: { color: '2563EB' } });
+          slide.addText([
+            { text: (elA.title || 'Elemento A') + '\n', options: { bold: true, fontSize: 13, color: '0F172A' } },
+            { text: (elA.metric || '') + '\n\n', options: { bold: true, fontSize: 16, color: '2563EB' } },
+            { text: (elA.points || []).map((p: string) => `• ${p}`).join('\n'), options: { fontSize: 11, color: '334155', lineSpacing: 16 } }
+          ], { x: 1.1, y: 1.5, w: 5.2, h: 3.8, fontFace: 'Arial' });
 
-        } else {
-          // Layout a griglia per le card informative
-          const startX = 0.8;
-          const startY = 1.6;
-          const numCards = cards.length;
-          
-          cards.forEach((card, index) => {
-            let col = index % 2;
-            let row = Math.floor(index / 2);
-            let wCard = 5.6;
-            let hCard = numCards === 3 && index === 2 ? 2.3 : 2.2;
+          // Box B
+          slide.addShape(pptx.ShapeType.roundRect, { x: 6.8, y: 1.3, w: 5.7, h: 4.2, fill: { color: 'FFFFFF' }, line: { color: 'CBD5E1', width: 1 }, rectRadius: 0.06 });
+          slide.addShape(pptx.ShapeType.rect, { x: 6.8, y: 1.3, w: 0.12, h: 4.2, fill: { color: '4F46E5' } });
+          slide.addText([
+            { text: (elB.title || 'Elemento B') + '\n', options: { bold: true, fontSize: 13, color: '0F172A' } },
+            { text: (elB.metric || '') + '\n\n', options: { bold: true, fontSize: 16, color: '4F46E5' } },
+            { text: (elB.points || []).map((p: string) => `• ${p}`).join('\n'), options: { fontSize: 11, color: '334155', lineSpacing: 16 } }
+          ], { x: 7.1, y: 1.5, w: 5.2, h: 3.8, fontFace: 'Arial' });
 
-            if (numCards === 4) {
-              hCard = 2.4;
-            }
-
-            const posX = startX + col * 5.9;
-            const posY = startY + row * 2.55;
-
-            slide.addShape(pptx.ShapeType.roundRect, {
-              x: posX,
-              y: posY,
-              w: wCard,
-              h: hCard,
-              fill: { color: 'FFFFFF' },
-              line: { color: 'CBD5E1', width: 1 },
-              rectRadius: 0.06
-            });
-
-            slide.addShape(pptx.ShapeType.rect, {
-              x: posX,
-              y: posY,
-              w: 0.1,
-              h: hCard,
-              fill: { color: index === 0 ? '2563EB' : index === 1 ? '4F46E5' : index === 2 ? '059669' : 'D97706' },
-            });
-
-            slide.addText([
-              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 12, color: '0F172A', fontFace: 'Arial' } },
-              { text: card.content || '', options: { fontSize: 10.5, color: '334155', lineSpacing: 14, fontFace: 'Arial' } }
-            ], {
-              x: posX + 0.3,
-              y: posY + 0.18,
-              w: 5.1,
-              h: hCard - 0.3,
-            });
-          });
-        }
-
-        if (slideData.comment) {
-          slide.addNotes(slideData.comment);
-        }
-      });
-    }
-
-    const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
-
-    return new NextResponse(pptxBuffer as unknown as BodyInit, {
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'Content-Disposition': 'attachment; filename="presentazione-docudecky-pro.pptx"',
-      },
-    });
-
-  } catch (error: any) {
-    console.error('Errore API Workflow Ottimizzato:', error);
-
-    if (error.message === 'QUOTA_EXHAUSTED' || error?.status === 429) {
-      return NextResponse.json(
-        { message: 'Hai raggiunto il limite massimo giornaliero di richieste. Verifica il tuo piano a consumo.' },
-        { status: 429 }
-      );
-    }
-
-    return NextResponse.json(
-      { message: error.message || 'Errore interno durante la generazione della presentazione.' },
-      { status: 500 }
-    );
-  }
-}
+          if (slideData.note) {
+            slide.addShape(pptx.ShapeType.roundRect, { x: 0.8, y: 5.7, w: 11.7, h: 0.9, fill: { color: 'EFF6FF' }, line: { color: 'BFDBFE', width: 1 }, rectRadius: 0
