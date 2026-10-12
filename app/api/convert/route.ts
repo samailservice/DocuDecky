@@ -4,28 +4,36 @@ import pptxgen from 'pptxgenjs';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-async function generateWithRetry(contents: any, maxRetries = 4) {
-  const model = 'gemini-2.5-flash';
+// Funzione con ritardi casuali (jitter) per simulare un comportamento umano e organico
+async function generateWithRetry(contents: any, maxRetries = 3) {
+  const model = 'gemini-1.5-flash';
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      // Simula il tempo di "lettura/pensiero" umano prima di inviare la richiesta (tra 1.2s e 2.8s)
+      const humanDelay = Math.floor(Math.random() * 1600) + 1200;
+      await new Promise((resolve) => setTimeout(resolve, humanDelay));
+
       const response = await ai.models.generateContent({
         model: model,
         contents: contents,
       });
       return response.text || '';
     } catch (error: any) {
-      console.warn(`Modello ${model} - Tentativo ${attempt}/${maxRetries} fallito:`, error.message);
+      console.warn(`Tentativo ${attempt}/${maxRetries} fallito:`, error.message);
       
       if (error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED') || error?.message?.includes('quota')) {
         throw new Error('QUOTA_EXHAUSTED');
       }
 
       if (attempt === maxRetries) throw error;
-      await new Promise((resolve) => setTimeout(resolve, attempt * 3000));
+
+      // Attesa di backoff con componente casuale (jitter) per evitare schemi robotici
+      const organicBackoff = Math.floor(Math.random() * 2500) + (attempt * 3500);
+      await new Promise((resolve) => setTimeout(resolve, organicBackoff));
     }
   }
-  throw new Error('Superato il limite massimo di tentativi con Gemini.');
+  throw new Error('Superato il limite massimo di tentativi.');
 }
 
 export async function POST(req: Request) {
