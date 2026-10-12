@@ -5,7 +5,7 @@ import pptxgen from 'pptxgenjs';
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function generateWithRetry(contents: any, maxRetries = 4) {
-  const model = 'gemini-1.5-flash';
+  const model = 'gemini-2.5-flash';
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -22,7 +22,6 @@ async function generateWithRetry(contents: any, maxRetries = 4) {
       }
 
       if (attempt === maxRetries) throw error;
-      // Attesa progressiva tra i tentativi per smaltire eventuali picchi temporanei
       await new Promise((resolve) => setTimeout(resolve, attempt * 3000));
     }
   }
