@@ -112,48 +112,50 @@ export async function POST(req: Request) {
 
     if (totalSlides === 0) {
       const slide = pptx.addSlide();
-      slide.addText("Nessun contenuto generato.", { x: 0.8, y: 0.8, w: '85%', h: '80%', fontSize: 14, color: '333333' });
+      slide.addText("Nessun contenuto generato.", { x: 0.8, y: 0.8, w: '85%', h: '80%', fontSize: 14, color: '333333', fontFace: 'Arial' });
     } else {
       slidesArray.forEach((slideData: any, idx: number) => {
         const slide = pptx.addSlide();
 
-        // 1. Sfondo professionale ardesia chiarissimo
+        // 1. Sfondo pulito standard compatibile
         slide.background = { color: 'F8FAFC' };
 
-        // 2. Barra superiore decorativa corporate (Brand Accent)
+        // 2. Barra superiore corporate
         slide.addShape(pptx.ShapeType.rect, {
           x: 0,
           y: 0,
           w: '100%',
-          h: 0.1,
-          fill: { color: '2563EB' } // Blu Corporate
+          h: 0.08,
+          fill: { color: '2563EB' }
         });
 
-        // 3. Titolo principale della slide
+        // 3. Titolo principale
         slide.addText(slideData.title || 'Slide Professionale', {
           x: 0.8,
           y: 0.45,
           w: '85%',
           h: 0.5,
-          fontSize: 22,
+          fontSize: 21,
           bold: true,
           color: '0F172A',
+          fontFace: 'Arial',
         });
 
-        // 4. Sottotitolo descrittivo
+        // 4. Sottotitolo
         if (slideData.subtitle) {
           slide.addText(slideData.subtitle, {
             x: 0.8,
             y: 0.95,
             w: '85%',
             h: 0.4,
-            fontSize: 13,
+            fontSize: 12.5,
             color: '64748B',
             italic: true,
+            fontFace: 'Arial',
           });
         }
 
-        // 5. Piè di pagina elegante con numerazione slide
+        // 5. Footer con numerazione
         slide.addText(`DocuDecky Pro  |  Slide ${idx + 1} di ${totalSlides}`, {
           x: 0.8,
           y: 6.9,
@@ -161,12 +163,13 @@ export async function POST(req: Request) {
           h: 0.3,
           fontSize: 9,
           color: '94A3B8',
+          fontFace: 'Arial',
         });
 
         const cards: any[] = slideData.cards || [];
         const hasChart = slideData.chart && slideData.chart.categories && slideData.chart.values;
 
-        // 6. Layout con Grafico Affiancato (Split Screen)
+        // 6. Layout con grafico affiancato ottimizzato per Google Slides
         if (hasChart) {
           let cardY = 1.5;
           const maxCardsToShow = Math.min(cards.length, 3);
@@ -174,71 +177,72 @@ export async function POST(req: Request) {
           for (let i = 0; i < maxCardsToShow; i++) {
             const card = cards[i];
 
-            // Card di sfondo bianca con bordo sottile
             slide.addShape(pptx.ShapeType.roundRect, {
               x: 0.8,
               y: cardY,
-              w: 5.2,
-              h: 1.55,
+              w: 5.1,
+              h: 1.5,
               fill: { color: 'FFFFFF' },
               line: { color: 'CBD5E1', width: 1 },
-              rectRadius: 0.08
+              rectRadius: 0.06
             });
 
-            // Barra d'accento laterale della card
             slide.addShape(pptx.ShapeType.rect, {
               x: 0.8,
               y: cardY,
-              w: 0.12,
-              h: 1.55,
+              w: 0.1,
+              h: 1.5,
               fill: { color: i % 2 === 0 ? '2563EB' : '4F46E5' },
             });
 
-            // Testo della card
             slide.addText([
-              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 12, color: '0F172A' } },
-              { text: card.content || '', options: { fontSize: 10.5, color: '334155', lineSpacing: 14 } }
+              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 11.5, color: '0F172A', fontFace: 'Arial' } },
+              { text: card.content || '', options: { fontSize: 10, color: '334155', lineSpacing: 13, fontFace: 'Arial' } }
             ], {
-              x: 1.15,
-              y: cardY + 0.15,
-              w: 4.7,
+              x: 1.1,
+              y: cardY + 0.12,
+              w: 4.6,
               h: 1.25,
             });
 
-            cardY += 1.75;
+            cardY += 1.68;
           }
 
-          // Inserimento del grafico a destra
+          // Correzione mapping categorie/etichette per Google Slides
           const chartType = String(slideData.chart.type).toLowerCase() === 'pie' ? pptx.ChartType.pie : pptx.ChartType.bar;
           const chartValues = slideData.chart.values.map((v: any) => parseFloat(v) || 0);
+          const chartCategories = slideData.chart.categories.map((c: any) => String(c));
 
           slide.addChart(
             chartType,
             [
               {
                 name: slideData.chart.title || 'Valori',
-                labels: slideData.chart.categories,
+                labels: chartCategories,
                 values: chartValues,
               },
             ],
             {
-              x: 6.35,
-              y: 1.5,
-              w: 6.35,
-              h: 4.9,
+              x: 6.2,
+              y: 1.45,
+              w: 6.5,
+              h: 5.0,
               title: slideData.chart.title || '',
               titleColor: '0F172A',
-              titleFontSize: 13,
+              titleFontSize: 12,
+              titleFontFace: 'Arial',
               showLegend: true,
               legendPos: 'b',
               chartColors: ['2563EB', '06B6D4', '10B981', 'F59E0B'],
               valAxisLabelColor: '64748B',
               catAxisLabelColor: '64748B',
+              catAxisLabelFontSize: 10,
+              valAxisLabelFontSize: 10,
             }
           );
 
         } else {
-          // 7. Layout a Griglia per le Card (2x2 o 1x3)
+          // 7. Layout a griglia standard
           const startX = 0.8;
           const startY = 1.5;
           
@@ -249,7 +253,6 @@ export async function POST(req: Request) {
             const posX = startX + col * 5.9;
             const posY = startY + row * 2.55;
 
-            // Sfondo card
             slide.addShape(pptx.ShapeType.roundRect, {
               x: posX,
               y: posY,
@@ -257,32 +260,29 @@ export async function POST(req: Request) {
               h: 2.35,
               fill: { color: 'FFFFFF' },
               line: { color: 'CBD5E1', width: 1 },
-              rectRadius: 0.08
+              rectRadius: 0.06
             });
 
-            // Barra verticale laterale
             slide.addShape(pptx.ShapeType.rect, {
               x: posX,
               y: posY,
-              w: 0.12,
+              w: 0.1,
               h: 2.35,
               fill: { color: index === 0 ? '2563EB' : index === 1 ? '4F46E5' : '059669' },
             });
 
-            // Contenuto testuale formattato
             slide.addText([
-              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 13, color: '0F172A' } },
-              { text: card.content || '', options: { fontSize: 11, color: '334155', lineSpacing: 16 } }
+              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 12.5, color: '0F172A', fontFace: 'Arial' } },
+              { text: card.content || '', options: { fontSize: 10.5, color: '334155', lineSpacing: 15, fontFace: 'Arial' } }
             ], {
-              x: posX + 0.35,
-              y: posY + 0.2,
+              x: posX + 0.3,
+              y: posY + 0.18,
               w: 5.0,
               h: 1.95,
             });
           });
         }
 
-        // Note per il relatore
         if (slideData.comment) {
           slide.addNotes(slideData.comment);
         }
@@ -303,7 +303,7 @@ export async function POST(req: Request) {
 
     if (error.message === 'QUOTA_EXHAUSTED' || error?.status === 429) {
       return NextResponse.json(
-        { message: 'Hai raggiunto il limite massimo giornaliero di richieste della chiave API Gemini. Verifica il tuo piano a consumo.' },
+        { message: 'Hai raggiunto il limite massimo giornaliero di richieste. Verifica il tuo piano a consumo.' },
         { status: 429 }
       );
     }
