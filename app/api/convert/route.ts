@@ -6,8 +6,8 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Funzione con ritardi casuali (jitter) per simulare un comportamento umano e organico
 async function generateWithRetry(contents: any, maxRetries = 3) {
-  // Utilizziamo il modello ufficiale standard e stabile per l'SDK @google/genai
-  const model = 'gemini-2.0-flash';
+  // Utilizziamo il modello ufficiale richiesto esplicitamente dai server Google nei log di errore
+  const model = 'gemini-3.8-flash';
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
