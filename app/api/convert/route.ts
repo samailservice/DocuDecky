@@ -4,85 +4,107 @@ import pptxgen from 'pptxgenjs';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-export async function POST(request: Request) {
+async function generateWithRetry(contents: any, maxRetries = 3) {
+  const model = 'gemini-2.5-flash';
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: model,
+        contents: contents,
+      });
+      return response.text || '';
+    } catch (error: any) {
+      console.warn(`Tentativo ${attempt}/${maxRetries} fallito:`, error.message);
+      if (error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED')) {
+        throw new Error('QUOTA_EXHAUSTED');
+      }
+      if (attempt === maxRetries) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
+  throw new Error('Superato il limite massimo di tentativi.');
+}
+
+export async function POST(req: Request) {
   try {
-    const formData = await request.formData();
+    const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const sector = (formData.get('sector') as string) || 'Business / Aziendale';
     const objective = (formData.get('objective') as string) || 'presentazione_pptx';
     const userAnswers = (formData.get('userAnswers') as string) || '';
 
-    let filePart = null;
-    let fileInfo = '';
-
-    if (file) {
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const base64Data = buffer.toString('base64');
-      filePart = {
-        inlineData: {
-          data: base64Data,
-          mimeType: file.type || 'application/pdf',
-        },
-      };
-      fileInfo = `File allegato: ${file.name} (${file.type || 'documento'})`;
+    if (!file) {
+      return NextResponse.json({ message: 'Nessun file caricato' }, { status: 400 });
     }
 
-    // Definizione delle istruzioni specializzate in base all'obiettivo scelto
+    const fileBuffer = await file.arrayBuffer();
+    const fileBytes = Buffer.from(fileBuffer);
+
     let objectiveInstructions = '';
     switch (objective) {
       case 'documento_docx':
-        objectiveInstructions = 'Genera un documento testuale strutturato e approfondito in stile report professionale, suddiviso in sezioni con Executive Summary, analisi dettagliata, tabelle concettuali e conclusioni strategiche.';
+        objectiveInstructions = 'Genera un documento testuale approfondito e strutturato in sezioni (Executive Summary, Analisi Dettagliata, Raccomandazioni e Conclusioni).';
         break;
       case 'pitch_presentazione':
-        objectiveInstructions = 'Genera la struttura e i testi persuasivi per un Pitch Deck ad alto impatto (Problema, Soluzione, Mercato, Business Model, Traction, Team).';
+        objectiveInstructions = 'Genera la struttura e i testi per un Pitch Deck ad alto impatto (Problema, Soluzione, Mercato, Business Model, Traction, Team).';
+        break;
+      case 'google_slides':
+        objectiveInstructions = 'Genera la scaletta di slide ottimizzata per Google Slides con titoli chiari e punti sintetici.';
         break;
       case 'presentazione_pptx':
-      case 'google_slides':
       default:
-        objectiveInstructions = 'Genera una scaletta professionale di slide ottimizzata per presentazioni PowerPoint o Google Slides, con titoli chiari, punti chiave sintetici (metodo bullet ultra-sintetico) e indicazioni visive per ogni slide.';
+        objectiveInstructions = 'Genera una presentazione professionale di slide per PowerPoint (PPTX) con titoli, punti chiave e dati salienti.';
         break;
     }
 
     const promptParts = [
-      filePart,
       {
-        text: `Sei un analista esperto e consulente strategico d'élite nel settore "${sector}".
-        
-${fileInfo}
-Obiettivo di output richiesto: "${objective}" (${objectiveInstructions}).
-Ulteriori informazioni fornite dall'utente: "${userAnswers}".
+        inlineData: {
+          mimeType: file.type || 'application/pdf',
+          data: fileBytes.toString('base64'),
+        },
+      },
+      `Sei un analista strategico ed esperto di dominio nel settore "${sector}".
+      
+Analizza accuratamente il documento allegato per identificarne l'argomento centrale, i numeri chiave e il contesto operativo.
 
-Compiti richiesti:
-1. Analizza a fondo il documento caricato per identificarne con precisione l'argomento centrale, i dati chiave e il dominio specifico.
-2. Se mancano informazioni essenziali per completare l'elaborazione, restituisci ESCLUSIVAMENTE un oggetto JSON in questo formato:
-   { "needsInput": true, "questions": ["Domanda 1...", "Domanda 2..."] }
-3. Se possiedi tutte le informazioni necessarie, produci il contenuto definitivo e professionale strutturato rigorosamente per l'obiettivo richiesto (${objective}), adattato al contesto e all'argomento specifico rilevato dal documento.`
-      }
-    ].filter(Boolean);
+Obiettivo richiesto dall'utente: "${objective}" (${objectiveInstructions}).
+Note dell'utente: "${userAnswers || 'Nessuna'}".
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: promptParts,
-    });
+ISTRUZIONI DI RISPOSTA:
+1. Se nel documento o nel contesto mancano dati fondamentali per completare un'analisi accurata, restituisci ESCLUSIVAMENTE un JSON valido in questo formato:
+{"needsInput": true, "questions": ["Domanda 1...", "Domanda 2..."]}
 
-    const responseText = response.text || '';
+2. Se hai tutte le informazioni necessarie, genera il contenuto strutturato completo per l'obiettivo scelto.
+
+Restituisci SOLO il testo o il JSON richiesto.`
+    ];
+
+    const responseText = await generateWithRetry(promptParts);
+    let cleanText = responseText.trim();
+
+    // Pulizia da blocchi markdown
+    if (cleanText.startsWith('```json')) {
+      cleanText = cleanText.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
+    } else if (cleanText.startsWith('```')) {
+      cleanText = cleanText.replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
+    }
 
     // Controllo se l'IA richiede input aggiuntivi
     try {
-      const cleanedText = responseText.replace(/
-```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleanedText);
+      const parsed = JSON.parse(cleanText);
       if (parsed && parsed.needsInput) {
         return NextResponse.json(parsed);
       }
     } catch (e) {
-      // Se non è JSON, è il contenuto finale generato
+      // Procedi con la generazione dell'output finale
     }
 
-    // Gestione obiettivo: Documento Testuale / Report (.docx / .txt)
+    // OUTPUT 1: Report Testuale / Documento (.docx / .txt)
     if (objective === 'documento_docx') {
       const docBuffer = Buffer.from(responseText, 'utf-8');
-      return new NextResponse(docBuffer, {
+      return new NextResponse(docBuffer as unknown as BodyInit, {
         headers: {
           'Content-Type': 'text/plain; charset=utf-8',
           'Content-Disposition': 'attachment; filename="report-strategico.txt"',
@@ -90,25 +112,35 @@ Compiti richiesti:
       });
     }
 
-    // Gestione obiettivo: Presentazione PPTX / Google Slides / Pitch Deck
+    // OUTPUT 2: Presentazioni PPTX / Google Slides / Pitch Deck
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_16x9';
 
-    const slideTitle = pptx.addSlide();
-    slideTitle.background = { color: '0F172A' };
-    slideTitle.addText(`Settore: ${sector}`, { x: 0.8, y: 1.0, w: '85%', h: 0.5, fontSize: 16, bold: true, color: '38bdf8' });
-    slideTitle.addText(objective === 'pitch_presentazione' ? 'Pitch Deck Strategico' : 'Presentazione Esecutiva', { x: 0.8, y: 1.6, w: '85%', h: 0.8, fontSize: 32, bold: true, color: 'FFFFFF' });
+    // Slide 1: Copertina
+    const slide1 = pptx.addSlide();
+    slide1.background = { color: '0F172A' };
+    slide1.addText(sector.toUpperCase(), { x: 0.8, y: 1.0, w: '85%', h: 0.4, fontSize: 12, bold: true, color: '38BDF8', fontFace: 'Arial' });
+    slide1.addText(
+      objective === 'pitch_presentazione' ? 'Pitch Deck Strategico' : 'Presentazione Esecutiva',
+      { x: 0.8, y: 1.6, w: '85%', h: 0.8, fontSize: 30, bold: true, color: 'FFFFFF', fontFace: 'Arial' }
+    );
+    slide1.addText(`Elaborazione basata su: ${file.name}`, { x: 0.8, y: 5.5, w: '85%', h: 0.4, fontSize: 11, color: '94A3B8', fontFace: 'Arial' });
 
-    const paragraphs = responseText.split('\n').filter(Boolean);
-    
-    const slideContent = pptx.addSlide();
-    slideContent.background = { color: 'F8FAFC' };
-    slideContent.addText('Sintesi ed Analisi', { x: 0.8, y: 0.6, w: '85%', h: 0.5, fontSize: 24, bold: true, color: '0F172A' });
-    slideContent.addText(paragraphs.slice(0, 10).join('\n'), { x: 0.8, y: 1.4, w: '85%', h: 5.0, fontSize: 13, color: '334155', lineSpacing: 18 });
+    // Slide 2: Contenuto Principale
+    const slide2 = pptx.addSlide();
+    slide2.background = { color: 'F8FAFC' };
+    slide2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: '2563EB' } });
+    slide2.addText('SINTESI STRATEGICA & ANALISI', { x: 0.8, y: 0.5, w: '85%', h: 0.4, fontSize: 18, bold: true, color: '0F172A', fontFace: 'Arial' });
+
+    const paragraphs = responseText.split('\n').filter((p) => p.trim().length > 0);
+    const bodyContent = paragraphs.slice(0, 12).join('\n');
+
+    slide2.addShape(pptx.ShapeType.roundRect, { x: 0.8, y: 1.2, w: 11.7, h: 5.2, fill: { color: 'FFFFFF' }, line: { color: 'CBD5E1', width: 1 }, rectRadius: 0.06 });
+    slide2.addText(bodyContent, { x: 1.1, y: 1.4, w: 11.1, h: 4.8, fontSize: 11, color: '334155', lineSpacing: 16, fontFace: 'Arial' });
 
     const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
 
-    const filename = objective === 'pitch_presentazione' ? 'pitch-deck.pptx' : 'presentazione-strategica.pptx';
+    const filename = objective === 'pitch_presentazione' ? 'pitch-deck.pptx' : 'presentazione-docudecky.pptx';
 
     return new NextResponse(pptxBuffer as unknown as BodyInit, {
       headers: {
@@ -118,16 +150,10 @@ Compiti richiesti:
     });
 
   } catch (error: any) {
-    console.error('Errore API Workflow:', error);
+    console.error('Errore API Convert:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        message: error.message || 'Errore durante l\'elaborazione con il modello Gemini.' 
-      },
+      { message: error.message || 'Errore interno durante la generazione.' },
       { status: 500 }
     );
   }
 }
-```eof
-
-Il codice è pronto e perfettamente configurato per gestire tutti gli obiettivi richiesti. Fammi sapere se hai bisogno di ulteriori personalizzazioni!
