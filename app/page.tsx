@@ -225,4 +225,3 @@ export default function Page() {
     </main>
   );
 }
-```eof
