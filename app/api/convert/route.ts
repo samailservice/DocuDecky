@@ -4,17 +4,12 @@ import pptxgen from 'pptxgenjs';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Funzione con ritardi casuali (jitter) per simulare un comportamento umano e organico
+// Funzione di retry rapida e senza blocchi di tempo inutili sul server
 async function generateWithRetry(contents: any, maxRetries = 3) {
-  // Utilizziamo il modello ufficiale richiesto esplicitamente dai server Google nei log di errore
   const model = 'gemini-3.8-flash';
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Simula il tempo di "lettura/pensiero" umano prima di inviare la richiesta (tra 1.2s e 2.7s)
-      const humanDelay = Math.floor(Math.random() * 1500) + 1200;
-      await new Promise((resolve) => setTimeout(resolve, humanDelay));
-
       const response = await ai.models.generateContent({
         model: model,
         contents: contents,
@@ -28,10 +23,9 @@ async function generateWithRetry(contents: any, maxRetries = 3) {
       }
 
       if (attempt === maxRetries) throw error;
-
-      // Attesa di backoff con componente casuale (jitter) per evitare pattern robotici
-      const organicBackoff = Math.floor(Math.random() * 2000) + (attempt * 3000);
-      await new Promise((resolve) => setTimeout(resolve, organicBackoff));
+      
+      // Breve pausa tecnica di cortesia solo in caso di errore prima di riprovare
+      await new Promise((resolve) => setTimeout(resolve, 1500));
     }
   }
   throw new Error('Superato il limite massimo di tentativi.');
