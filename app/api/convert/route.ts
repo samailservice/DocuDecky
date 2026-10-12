@@ -6,12 +6,13 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Funzione con ritardi casuali (jitter) per simulare un comportamento umano e organico
 async function generateWithRetry(contents: any, maxRetries = 3) {
-  const model = 'gemini-1.5-flash';
+  // Utilizziamo il modello ufficiale standard e stabile per l'SDK @google/genai
+  const model = 'gemini-2.0-flash';
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Simula il tempo di "lettura/pensiero" umano prima di inviare la richiesta (tra 1.2s e 2.8s)
-      const humanDelay = Math.floor(Math.random() * 1600) + 1200;
+      // Simula il tempo di "lettura/pensiero" umano prima di inviare la richiesta (tra 1.2s e 2.7s)
+      const humanDelay = Math.floor(Math.random() * 1500) + 1200;
       await new Promise((resolve) => setTimeout(resolve, humanDelay));
 
       const response = await ai.models.generateContent({
@@ -28,8 +29,8 @@ async function generateWithRetry(contents: any, maxRetries = 3) {
 
       if (attempt === maxRetries) throw error;
 
-      // Attesa di backoff con componente casuale (jitter) per evitare schemi robotici
-      const organicBackoff = Math.floor(Math.random() * 2500) + (attempt * 3500);
+      // Attesa di backoff con componente casuale (jitter) per evitare pattern robotici
+      const organicBackoff = Math.floor(Math.random() * 2000) + (attempt * 3000);
       await new Promise((resolve) => setTimeout(resolve, organicBackoff));
     }
   }
