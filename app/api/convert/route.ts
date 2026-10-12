@@ -4,7 +4,6 @@ import pptxgen from 'pptxgenjs';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Funzione di retry rapida e senza blocchi di tempo inutili sul server
 async function generateWithRetry(contents: any, maxRetries = 3) {
   const model = 'gemini-3.8-flash';
 
@@ -23,8 +22,6 @@ async function generateWithRetry(contents: any, maxRetries = 3) {
       }
 
       if (attempt === maxRetries) throw error;
-      
-      // Breve pausa tecnica di cortesia solo in caso di errore prima di riprovare
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
   }
@@ -53,7 +50,7 @@ export async function POST(req: Request) {
           data: fileBytes.toString('base64'),
         },
       },
-      `Sei un analista aziendale e un esperto di corporate storytelling. Analizza il documento allegato estraendo i dati chiave e genera una presentazione professionale compatibile con Google Slide composta da esattamente 6 o 7 slide.
+      `Sei un analista aziendale senior e un esperto di corporate storytelling. Analizza il documento allegato estraendo i dati chiave e genera una presentazione professionale in stile consulenza strategica composta da esattamente 6 o 7 slide.
       
       Contesto utente:
       - Obiettivo: ${objective}
@@ -111,19 +108,31 @@ export async function POST(req: Request) {
     pptx.layout = 'LAYOUT_16x9';
 
     const slidesArray = presentationData.slides || [];
+    const totalSlides = slidesArray.length;
 
-    if (slidesArray.length === 0) {
+    if (totalSlides === 0) {
       const slide = pptx.addSlide();
       slide.addText("Nessun contenuto generato.", { x: 0.8, y: 0.8, w: '85%', h: '80%', fontSize: 14, color: '333333' });
     } else {
-      for (const slideData of slidesArray) {
+      slidesArray.forEach((slideData: any, idx: number) => {
         const slide = pptx.addSlide();
 
+        // 1. Sfondo professionale ardesia chiarissimo
         slide.background = { color: 'F8FAFC' };
 
+        // 2. Barra superiore decorativa corporate (Brand Accent)
+        slide.addShape(pptx.ShapeType.rect, {
+          x: 0,
+          y: 0,
+          w: '100%',
+          h: 0.1,
+          fill: { color: '2563EB' } // Blu Corporate
+        });
+
+        // 3. Titolo principale della slide
         slide.addText(slideData.title || 'Slide Professionale', {
           x: 0.8,
-          y: 0.5,
+          y: 0.45,
           w: '85%',
           h: 0.5,
           fontSize: 22,
@@ -131,54 +140,75 @@ export async function POST(req: Request) {
           color: '0F172A',
         });
 
+        // 4. Sottotitolo descrittivo
         if (slideData.subtitle) {
           slide.addText(slideData.subtitle, {
             x: 0.8,
-            y: 1.0,
+            y: 0.95,
             w: '85%',
             h: 0.4,
             fontSize: 13,
-            color: '475569',
+            color: '64748B',
             italic: true,
           });
         }
 
+        // 5. Piè di pagina elegante con numerazione slide
+        slide.addText(`DocuDecky Pro  |  Slide ${idx + 1} di ${totalSlides}`, {
+          x: 0.8,
+          y: 6.9,
+          w: '85%',
+          h: 0.3,
+          fontSize: 9,
+          color: '94A3B8',
+        });
+
         const cards: any[] = slideData.cards || [];
         const hasChart = slideData.chart && slideData.chart.categories && slideData.chart.values;
 
+        // 6. Layout con Grafico Affiancato (Split Screen)
         if (hasChart) {
           let cardY = 1.5;
-          for (const card of cards.slice(0, 3)) {
+          const maxCardsToShow = Math.min(cards.length, 3);
+          
+          for (let i = 0; i < maxCardsToShow; i++) {
+            const card = cards[i];
+
+            // Card di sfondo bianca con bordo sottile
             slide.addShape(pptx.ShapeType.roundRect, {
               x: 0.8,
               y: cardY,
               w: 5.2,
-              h: 1.2,
+              h: 1.55,
               fill: { color: 'FFFFFF' },
-              line: { color: 'E2E8F0', width: 1 },
+              line: { color: 'CBD5E1', width: 1 },
+              rectRadius: 0.08
             });
 
+            // Barra d'accento laterale della card
             slide.addShape(pptx.ShapeType.rect, {
               x: 0.8,
               y: cardY,
               w: 0.12,
-              h: 1.2,
-              fill: { color: '4F46E5' },
+              h: 1.55,
+              fill: { color: i % 2 === 0 ? '2563EB' : '4F46E5' },
             });
 
+            // Testo della card
             slide.addText([
-              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 12, color: '1E293B' } },
-              { text: card.content || '', options: { fontSize: 10, color: '475569', lineSpacing: 12 } }
+              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 12, color: '0F172A' } },
+              { text: card.content || '', options: { fontSize: 10.5, color: '334155', lineSpacing: 14 } }
             ], {
-              x: 1.1,
-              y: cardY + 0.1,
+              x: 1.15,
+              y: cardY + 0.15,
               w: 4.7,
-              h: 1.0,
+              h: 1.25,
             });
 
-            cardY += 1.35;
+            cardY += 1.75;
           }
 
+          // Inserimento del grafico a destra
           const chartType = String(slideData.chart.type).toLowerCase() === 'pie' ? pptx.ChartType.pie : pptx.ChartType.bar;
           const chartValues = slideData.chart.values.map((v: any) => parseFloat(v) || 0);
 
@@ -192,61 +222,71 @@ export async function POST(req: Request) {
               },
             ],
             {
-              x: 6.4,
+              x: 6.35,
               y: 1.5,
-              w: 5.8,
-              h: 4.8,
+              w: 6.35,
+              h: 4.9,
               title: slideData.chart.title || '',
+              titleColor: '0F172A',
+              titleFontSize: 13,
               showLegend: true,
               legendPos: 'b',
-              chartColors: ['4F46E5', '06B6D4', '10B981', 'F59E0B'],
+              chartColors: ['2563EB', '06B6D4', '10B981', 'F59E0B'],
+              valAxisLabelColor: '64748B',
+              catAxisLabelColor: '64748B',
             }
           );
 
         } else {
-          let startX = 0.8;
-          let startY = 1.5;
+          // 7. Layout a Griglia per le Card (2x2 o 1x3)
+          const startX = 0.8;
+          const startY = 1.5;
           
           cards.forEach((card, index) => {
             const col = index % 2;
             const row = Math.floor(index / 2);
             
-            const posX = startX + col * 5.8;
-            const posY = startY + row * 1.85;
+            const posX = startX + col * 5.9;
+            const posY = startY + row * 2.55;
 
+            // Sfondo card
             slide.addShape(pptx.ShapeType.roundRect, {
               x: posX,
               y: posY,
-              w: 5.5,
-              h: 1.65,
+              w: 5.6,
+              h: 2.35,
               fill: { color: 'FFFFFF' },
-              line: { color: 'E2E8F0', width: 1 },
+              line: { color: 'CBD5E1', width: 1 },
+              rectRadius: 0.08
             });
 
+            // Barra verticale laterale
             slide.addShape(pptx.ShapeType.rect, {
               x: posX,
               y: posY,
               w: 0.12,
-              h: 1.65,
-              fill: { color: '4F46E5' },
+              h: 2.35,
+              fill: { color: index === 0 ? '2563EB' : index === 1 ? '4F46E5' : '059669' },
             });
 
+            // Contenuto testuale formattato
             slide.addText([
-              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 13, color: '1E293B' } },
-              { text: card.content || '', options: { fontSize: 11, color: '475569', lineSpacing: 14 } }
+              { text: (card.title || '') + '\n', options: { bold: true, fontSize: 13, color: '0F172A' } },
+              { text: card.content || '', options: { fontSize: 11, color: '334155', lineSpacing: 16 } }
             ], {
-              x: posX + 0.3,
-              y: posY + 0.15,
+              x: posX + 0.35,
+              y: posY + 0.2,
               w: 5.0,
-              h: 1.35,
+              h: 1.95,
             });
           });
         }
 
+        // Note per il relatore
         if (slideData.comment) {
           slide.addNotes(slideData.comment);
         }
-      }
+      });
     }
 
     const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
@@ -263,7 +303,7 @@ export async function POST(req: Request) {
 
     if (error.message === 'QUOTA_EXHAUSTED' || error?.status === 429) {
       return NextResponse.json(
-        { message: 'Hai raggiunto il limite massimo giornaliero di richieste gratuite della chiave API Gemini (20/giorno). Riprova domani o usa una chiave a pagamento.' },
+        { message: 'Hai raggiunto il limite massimo giornaliero di richieste della chiave API Gemini. Verifica il tuo piano a consumo.' },
         { status: 429 }
       );
     }
